@@ -59,16 +59,18 @@
         <tr><th>NCM</th><th>Monofásico</th><th>CST</th><th>Inconsistência</th><th>Data</th></tr>
       </thead>
       <tbody>
-        {% for c in empresa.consultas.order_by_desc_created_at | default([]) %}
-        {% endfor %}
-        {% set consultas_recentes = empresa.consultas.order_by(empresa.consultas.property.mapper.class_.created_at.desc()).limit(5).all() %}
         {% for c in consultas_recentes %}
-        <tr>
-          <td class="font-monospace"><a href="{{ url_for('consulta.detalhe', id=c.id) }}">{{ c.ncm_consultado }}</a></td>
-          <td>{% if c.monofasico %}<span class="badge bg-success">Sim</span>{% else %}<span class="badge bg-danger">Não</span>{% endif %}</td>
+        <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.monofasico %}table-success{% endif %}">
+          <td class="font-monospace">
+            <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">{{ c.ncm_consultado }}</a>
+          </td>
+          <td>
+            {% if c.monofasico %}<span class="badge bg-success">Sim</span>
+            {% else %}<span class="badge bg-danger">Não</span>{% endif %}
+          </td>
           <td class="font-monospace">{{ c.cst_sugerido or '—' }}</td>
           <td>{% if c.inconsistencia_detectada %}<span class="badge bg-warning text-dark">Sim</span>{% else %}—{% endif %}</td>
-          <td>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</td>
+          <td><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
         </tr>
         {% else %}
         <tr><td colspan="5" class="text-center text-muted py-3">Nenhuma consulta realizada.</td></tr>

@@ -75,8 +75,15 @@ def nova():
 @empresa_bp.route('/<int:id>')
 @login_required
 def detalhe(id):
+    from app.models.consulta import Consulta
     empresa = db.get_or_404(Empresa, id)
-    return render_template('empresa/detalhe.html', empresa=empresa)
+    consultas_recentes = (Consulta.query
+                          .filter_by(empresa_id=empresa.id)
+                          .order_by(Consulta.created_at.desc())
+                          .limit(5).all())
+    return render_template('empresa/detalhe.html',
+                           empresa=empresa,
+                           consultas_recentes=consultas_recentes)
 
 
 @empresa_bp.route('/<int:id>/editar', methods=['GET', 'POST'])

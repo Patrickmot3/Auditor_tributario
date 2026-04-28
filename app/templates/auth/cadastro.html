@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Criar Conta{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+  <div class="card shadow-lg" style="width: 100%; max-width: 480px;">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-shield-check text-primary" style="font-size: 2.5rem;"></i>
+        <h4 class="mt-2 fw-bold">Criar Conta</h4>
+        <p class="text-muted small">TribSync — Validador Tributário NCM</p>
+      </div>
+
+      <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome completo <span class="text-danger">*</span></label>
+          <input type="text" name="nome" class="form-control"
+                 value="{{ nome or '' }}" required autofocus
+                 placeholder="Seu nome completo">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">E-mail <span class="text-danger">*</span></label>
+          <input type="email" name="email" class="form-control"
+                 value="{{ email or '' }}" required
+                 placeholder="seu@email.com.br">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">CPF ou CNPJ</label>
+          <input type="text" name="cpf_cnpj" class="form-control font-monospace"
+                 value="{{ cpf_cnpj or '' }}"
+                 placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                 maxlength="18">
+          <div class="form-text">Opcional — usado para identificação na plataforma.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Senha <span class="text-danger">*</span></label>
+          <input type="password" name="senha" class="form-control" required
+                 minlength="8" placeholder="Mínimo 8 caracteres">
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Confirmar senha <span class="text-danger">*</span></label>
+          <input type="password" name="confirmacao" class="form-control" required
+                 minlength="8" placeholder="Repita a senha">
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 mb-3">
+          <i class="bi bi-person-plus"></i> Criar conta
+        </button>
+
+        <div class="text-center">
+          <span class="text-muted small">Já tem conta?</span>
+          <a href="{{ url_for('auth.login') }}" class="small ms-1">Fazer login</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

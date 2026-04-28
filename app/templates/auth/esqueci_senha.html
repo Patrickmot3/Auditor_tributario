@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Esqueci minha senha{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+  <div class="card shadow-lg" style="width: 100%; max-width: 440px;">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-key text-warning" style="font-size: 2.5rem;"></i>
+        <h5 class="mt-2 fw-bold">Esqueci minha senha</h5>
+        <p class="text-muted small">Informe seu e-mail para receber o link de redefinição.</p>
+      </div>
+
+      {% if link_reset %}
+      <div class="alert alert-warning">
+        <strong><i class="bi bi-exclamation-triangle"></i> Link de redefinição gerado:</strong><br>
+        <small class="text-break">
+          <a href="{{ link_reset }}">{{ link_reset }}</a>
+        </small>
+        <hr class="my-2">
+        <small class="text-muted">
+          Este link aparece aqui pois o envio de e-mail não está configurado.
+          Copie e acesse para redefinir a senha. Válido por 2 horas.
+        </small>
+      </div>
+      {% endif %}
+
+      <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">E-mail cadastrado</label>
+          <input type="email" name="email" class="form-control" required
+                 autofocus placeholder="seu@email.com.br">
+        </div>
+        <button type="submit" class="btn btn-warning w-100 text-dark mb-3">
+          <i class="bi bi-envelope"></i> Enviar link de redefinição
+        </button>
+        <div class="text-center">
+          <a href="{{ url_for('auth.login') }}" class="small">
+            <i class="bi bi-arrow-left"></i> Voltar ao login
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
