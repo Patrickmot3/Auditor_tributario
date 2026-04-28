@@ -17,26 +17,26 @@ from app.models.base_tributaria import LogAtualizacao
 logger = logging.getLogger(__name__)
 
 TABELAS_SPED = {
+    # 4.3.10 — Veículos e Autopeças (Lei 10.485/2002)
     '4.3.10': {
         'url_download': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1638',
         'nome': 'Veículos e Autopeças',
     },
-    '4.3.11': {
-        'url_download': 'http://sped.rfb.gov.br/arquivo/download/5786',
-        'url_show': 'http://sped.rfb.gov.br/arquivo/show/5786',
-        'nome': 'Combustíveis',
-    },
+    # 4.3.13 — Fármacos e Perfumaria (Lei 10.147/2000)
     '4.3.13': {
         'url_download': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1643',
         'nome': 'Fármacos e Perfumaria',
     },
+    # 4.3.15 — Bebidas Frias (Lei 13.097/2015) — arquivo ID 5786 no SPED
     '4.3.15': {
-        'url_download': 'http://sped.rfb.gov.br/arquivo/download/1645',
-        'url_show': 'http://sped.rfb.gov.br/arquivo/show/1645',
+        'url_download': 'http://sped.rfb.gov.br/arquivo/download/5786',
+        'url_show': 'http://sped.rfb.gov.br/arquivo/show/5786',
         'nome': 'Bebidas Frias',
     },
+    # Nota: Combustíveis (Lei 9.718/98) não possui tabela SPED para download;
+    # NCMs são mantidos via seed e atualizados manualmente quando a lei mudar.
 }
 
 HEADERS = {

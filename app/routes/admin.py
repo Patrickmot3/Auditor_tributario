@@ -51,7 +51,7 @@ def dashboard():
 @admin_bp.route('/atualizacao/status')
 @login_required
 def atualizacao_status():
-    tabelas = ['4.3.10', '4.3.11', '4.3.13', '4.3.15']
+    tabelas = ['4.3.10', '4.3.13', '4.3.15']
     status_tabelas = []
 
     for tabela in tabelas:

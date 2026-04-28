@@ -24,16 +24,19 @@ def start_scheduler(app):
     tz = pytz.timezone(app.config.get('SCHEDULER_TIMEZONE', 'America/Sao_Paulo'))
     _scheduler = BackgroundScheduler(timezone=tz)
 
+    # Tabelas com download automático disponível no SPED
+    _TABELAS = ['4.3.10', '4.3.13', '4.3.15']
+
     def verificar_versao():
         with app.app_context():
             from app.services.rfb_scraper import verificar_atualizacao
-            for tabela in ['4.3.10', '4.3.11', '4.3.13', '4.3.15']:
+            for tabela in _TABELAS:
                 verificar_atualizacao(tabela)
 
     def atualizar_tabelas():
         with app.app_context():
             from app.services.rfb_scraper import verificar_atualizacao, atualizar_tabela
-            for tabela in ['4.3.10', '4.3.11', '4.3.13', '4.3.15']:
+            for tabela in _TABELAS:
                 if verificar_atualizacao(tabela):
                     atualizar_tabela(tabela)
 
