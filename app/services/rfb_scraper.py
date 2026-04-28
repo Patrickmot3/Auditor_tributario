@@ -1,9 +1,14 @@
 """
 Serviço de consulta e atualização das tabelas oficiais SPED/RFB.
+Detecta automaticamente o formato do arquivo (DOCX, XLSX ou HTML).
 """
+import io
 import logging
+import re
 import time
+import zipfile
 from datetime import datetime, timezone, date
+
 import requests
 from app.extensions import db
 from app.models.ncm import NcmTributario, GrupoTributario
@@ -35,41 +40,176 @@ TABELAS_SPED = {
 }
 
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (compatible; TribSync/1.0; +https://tribsync.com.br)',
+    'User-Agent': 'Mozilla/5.0 (compatible; TribSync/1.0)',
 }
-
 MAX_TENTATIVAS = 3
 INTERVALO_RETRY = 5
 
 
-def _get_com_retry(url, tentativas=MAX_TENTATIVAS, stream=False):
+# ─── HTTP ─────────────────────────────────────────────────────────────────────
+
+def _get_com_retry(url, tentativas=MAX_TENTATIVAS):
     for i in range(tentativas):
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=30, stream=stream)
+            resp = requests.get(url, headers=HEADERS, timeout=30)
             resp.raise_for_status()
             return resp
         except requests.RequestException as e:
-            logger.warning(f'Tentativa {i+1}/{tentativas} falhou para {url}: {e}')
+            logger.warning(f'Tentativa {i+1}/{tentativas} falhou: {url} — {e}')
             if i < tentativas - 1:
                 time.sleep(INTERVALO_RETRY)
     raise Exception(f'Falha ao acessar {url} após {tentativas} tentativas')
 
 
+# ─── Detecção de formato ──────────────────────────────────────────────────────
+
+def _detectar_formato(conteudo: bytes, content_type: str) -> str:
+    """
+    Detecta o formato do arquivo retornado pela RFB.
+    Retorna: 'docx', 'xlsx', 'html' ou 'desconhecido'.
+    """
+    ct = content_type.lower()
+
+    # Verificar pela assinatura magic bytes (PK = ZIP = OOXML ou DOCX)
+    if conteudo[:2] == b'PK':
+        # É um arquivo ZIP — pode ser DOCX ou XLSX
+        try:
+            with zipfile.ZipFile(io.BytesIO(conteudo)) as z:
+                nomes = z.namelist()
+                # DOCX tem word/document.xml
+                if any('word/document' in n for n in nomes):
+                    return 'docx'
+                # XLSX tem xl/workbook
+                if any('xl/workbook' in n or 'xl/worksheets' in n for n in nomes):
+                    return 'xlsx'
+        except Exception:
+            pass
+
+    # Verificar pelo Content-Type
+    if 'spreadsheet' in ct or 'excel' in ct or 'xlsx' in ct or 'xls' in ct:
+        return 'xlsx'
+    if 'word' in ct or 'docx' in ct or 'msword' in ct:
+        return 'docx'
+    if 'html' in ct or 'text' in ct:
+        return 'html'
+
+    # Tentar pelo conteúdo textual
+    try:
+        texto = conteudo[:200].decode('utf-8', errors='ignore').lower()
+        if '<html' in texto or '<!doctype' in texto:
+            return 'html'
+    except Exception:
+        pass
+
+    return 'desconhecido'
+
+
+# ─── Parsers ──────────────────────────────────────────────────────────────────
+
+def _extrair_ncms_docx(conteudo: bytes) -> list[tuple[str, str]]:
+    """Extrai pares (ncm, descricao) de arquivo DOCX."""
+    from docx import Document
+    doc = Document(io.BytesIO(conteudo))
+    resultado = []
+    for tabela in doc.tables:
+        for linha in tabela.rows:
+            celulas = [c.text.strip() for c in linha.cells]
+            if len(celulas) < 2:
+                continue
+            ncm_raw = celulas[0].replace('.', '').replace('-', '').strip()
+            if re.match(r'^\d{4,10}$', ncm_raw):
+                resultado.append((ncm_raw, celulas[1]))
+    # Também varrer parágrafos para NCMs em texto corrido
+    for para in doc.paragraphs:
+        match = re.match(r'^(\d[\d.]{3,})\s+(.*)', para.text.strip())
+        if match:
+            ncm_raw = match.group(1).replace('.', '').replace('-', '').strip()
+            if re.match(r'^\d{4,10}$', ncm_raw):
+                resultado.append((ncm_raw, match.group(2).strip()))
+    return resultado
+
+
+def _extrair_ncms_xlsx(conteudo: bytes) -> list[tuple[str, str]]:
+    """Extrai pares (ncm, descricao) de arquivo XLSX."""
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+    resultado = []
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            if not row or row[0] is None:
+                continue
+            ncm_raw = str(row[0]).replace('.', '').replace('-', '').strip()
+            if re.match(r'^\d{4,10}$', ncm_raw):
+                descricao = str(row[1]).strip() if len(row) > 1 and row[1] else ''
+                resultado.append((ncm_raw, descricao))
+    return resultado
+
+
+def _extrair_ncms_html(conteudo: bytes) -> list[tuple[str, str]]:
+    """Extrai pares (ncm, descricao) de HTML com tabelas."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(conteudo, 'lxml')
+    resultado = []
+    for tr in soup.find_all('tr'):
+        tds = [td.get_text(strip=True) for td in tr.find_all(['td', 'th'])]
+        if len(tds) < 2:
+            continue
+        ncm_raw = tds[0].replace('.', '').replace('-', '').strip()
+        if re.match(r'^\d{4,10}$', ncm_raw):
+            resultado.append((ncm_raw, tds[1]))
+    return resultado
+
+
+# ─── Persistência ─────────────────────────────────────────────────────────────
+
+def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[int, int]:
+    inseridos = atualizados = 0
+    for ncm_raw, descricao in pares:
+        tipo_ref = 'ncm_exato' if len(ncm_raw) == 8 else f'posicao_{len(ncm_raw)}'
+        existente = NcmTributario.query.filter_by(
+            ncm=ncm_raw, grupo_tributario_id=grupo.id,
+        ).first()
+        if existente:
+            existente.descricao = descricao
+            existente.updated_at = datetime.now(timezone.utc)
+            atualizados += 1
+        else:
+            db.session.add(NcmTributario(
+                ncm=ncm_raw,
+                descricao=descricao,
+                grupo_tributario_id=grupo.id,
+                monofasico=True,
+                tipo_referencia=tipo_ref,
+                lei=grupo.lei_base,
+                cst_entrada='70',
+                cst_saida='04',
+                cfop_entrada_simples='1102',
+                cfop_saida_simples='5102',
+                pis_aliquota_fabricante=1.5,
+                cofins_aliquota_fabricante=7.0,
+                pis_aliquota_varejista=0.0,
+                cofins_aliquota_varejista=0.0,
+                vigencia_inicio=date.today(),
+                fonte_url=TABELAS_SPED[tabela_id]['url_download'],
+                ativo=True,
+            ))
+            inseridos += 1
+    db.session.commit()
+    return inseridos, atualizados
+
+
+# ─── API pública ──────────────────────────────────────────────────────────────
+
 def _checar_versao(tabela_id):
-    """Verifica versão atual da tabela na página RFB."""
     info = TABELAS_SPED.get(tabela_id)
     if not info:
         return None
     try:
         resp = _get_com_retry(info['url_show'])
-        texto = resp.text
-        # Tentar extrair versão do HTML (padrão: "Versão X.XX" ou data)
-        import re
-        match = re.search(r'Vers[aã]o\s*:?\s*([\d.]+)', texto, re.IGNORECASE)
+        match = re.search(r'Vers[aã]o\s*:?\s*([\d.]+)', resp.text, re.IGNORECASE)
         if match:
             return match.group(1)
-        # Fallback: data de atualização
-        match = re.search(r'(\d{2}/\d{2}/\d{4})', texto)
+        match = re.search(r'(\d{2}/\d{2}/\d{4})', resp.text)
         if match:
             return match.group(1)
     except Exception as e:
@@ -78,66 +218,81 @@ def _checar_versao(tabela_id):
 
 
 def verificar_atualizacao(tabela_id, executado_por='scheduler_auto'):
-    """
-    Verifica se há nova versão da tabela SPED.
-    Retorna True se houver atualização, False caso contrário.
-    """
     versao_rfb = _checar_versao(tabela_id)
     if not versao_rfb:
         return False
 
-    ultimo_log = LogAtualizacao.query.filter(
+    ultimo = LogAtualizacao.query.filter(
         LogAtualizacao.tabela_sped == tabela_id,
         LogAtualizacao.status.in_(['sucesso', 'seed_inicial']),
     ).order_by(LogAtualizacao.data_importacao.desc()).first()
 
-    versao_atual = ultimo_log.versao if ultimo_log else None
-
-    if versao_atual == versao_rfb:
-        log = LogAtualizacao(
-            tabela_sped=tabela_id,
-            versao=versao_rfb,
+    if ultimo and ultimo.versao == versao_rfb:
+        db.session.add(LogAtualizacao(
+            tabela_sped=tabela_id, versao=versao_rfb,
             data_importacao=datetime.now(timezone.utc),
             status='sem_alteracoes',
             mensagem=f'Tabela {tabela_id} já está na versão {versao_rfb}',
             executado_por=executado_por,
-        )
-        db.session.add(log)
+        ))
         db.session.commit()
         return False
-
     return True
 
 
 def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
-    """
-    Baixa e processa a tabela SPED, atualizando ncms_tributarios.
-    """
     info = TABELAS_SPED.get(tabela_id)
     if not info:
         return {'erro': f'Tabela {tabela_id} não configurada'}
 
     versao_rfb = _checar_versao(tabela_id)
-    inseridos = 0
-    atualizados = 0
+    inseridos = atualizados = 0
     status = 'erro'
     mensagem = ''
 
     try:
-        resp = _get_com_retry(info['url_download'], stream=True)
-        conteudo = resp.content
+        grupo = GrupoTributario.query.filter_by(tabela_sped=tabela_id).first()
+        if not grupo:
+            raise Exception(f'Grupo tributário para tabela {tabela_id} não encontrado')
 
-        # Tentar parsear como DOCX
-        inseridos, atualizados = _processar_docx(conteudo, tabela_id)
+        resp = _get_com_retry(info['url_download'])
+        conteudo = resp.content
+        content_type = resp.headers.get('Content-Type', '')
+        fmt = _detectar_formato(conteudo, content_type)
+
+        logger.info(f'Tabela {tabela_id}: formato detectado = {fmt} | Content-Type = {content_type}')
+
+        if fmt == 'docx':
+            pares = _extrair_ncms_docx(conteudo)
+        elif fmt == 'xlsx':
+            pares = _extrair_ncms_xlsx(conteudo)
+        elif fmt == 'html':
+            pares = _extrair_ncms_html(conteudo)
+        else:
+            # Tentar todos em sequência
+            pares = []
+            for fn in [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html]:
+                try:
+                    pares = fn(conteudo)
+                    if pares:
+                        break
+                except Exception:
+                    continue
+
+        if not pares:
+            raise Exception(f'Nenhum NCM extraído da tabela {tabela_id} (formato: {fmt})')
+
+        inseridos, atualizados = _salvar_ncms(pares, tabela_id, grupo)
         status = 'sucesso'
-        mensagem = f'Tabela {tabela_id} atualizada. Inseridos: {inseridos}, Atualizados: {atualizados}'
+        mensagem = f'Tabela {tabela_id} ({fmt}): {inseridos} inseridos, {atualizados} atualizados'
+        logger.info(mensagem)
 
     except Exception as e:
         status = 'erro'
         mensagem = str(e)
         logger.error(f'Erro ao atualizar tabela {tabela_id}: {e}')
 
-    log = LogAtualizacao(
+    db.session.add(LogAtualizacao(
         tabela_sped=tabela_id,
         versao=versao_rfb,
         data_atualizacao_rfb=date.today(),
@@ -147,81 +302,8 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
         registros_atualizados=atualizados,
         mensagem=mensagem,
         executado_por=executado_por,
-    )
-    db.session.add(log)
+    ))
     db.session.commit()
 
-    return {
-        'status': status,
-        'inseridos': inseridos,
-        'atualizados': atualizados,
-        'mensagem': mensagem,
-    }
-
-
-def _processar_docx(conteudo_bytes, tabela_id):
-    """Extrai NCMs de arquivo DOCX da RFB."""
-    import io
-    from docx import Document
-    import re
-
-    inseridos = 0
-    atualizados = 0
-
-    grupo = GrupoTributario.query.filter_by(tabela_sped=tabela_id).first()
-    if not grupo:
-        raise Exception(f'Grupo tributário para tabela {tabela_id} não encontrado no banco')
-
-    try:
-        doc = Document(io.BytesIO(conteudo_bytes))
-    except Exception as e:
-        raise Exception(f'Erro ao abrir DOCX: {e}')
-
-    for tabela in doc.tables:
-        for linha in tabela.rows:
-            celulas = [c.text.strip() for c in linha.cells]
-            if len(celulas) < 2:
-                continue
-
-            # Extrair NCM da primeira célula
-            ncm_raw = celulas[0].replace('.', '').replace('-', '').strip()
-            if not re.match(r'^\d{4,10}$', ncm_raw):
-                continue
-
-            descricao = celulas[1] if len(celulas) > 1 else ''
-            tipo_ref = 'ncm_exato' if len(ncm_raw) == 8 else f'posicao_{len(ncm_raw)}'
-
-            existente = NcmTributario.query.filter_by(
-                ncm=ncm_raw,
-                grupo_tributario_id=grupo.id,
-            ).first()
-
-            if existente:
-                existente.descricao = descricao
-                existente.updated_at = datetime.now(timezone.utc)
-                atualizados += 1
-            else:
-                novo = NcmTributario(
-                    ncm=ncm_raw,
-                    descricao=descricao,
-                    grupo_tributario_id=grupo.id,
-                    monofasico=True,
-                    tipo_referencia=tipo_ref,
-                    lei=grupo.lei_base,
-                    cst_entrada='70',
-                    cst_saida='04',
-                    cfop_entrada_simples='1102',
-                    cfop_saida_simples='5102',
-                    pis_aliquota_fabricante=1.5,
-                    cofins_aliquota_fabricante=7.0,
-                    pis_aliquota_varejista=0.0,
-                    cofins_aliquota_varejista=0.0,
-                    vigencia_inicio=date.today(),
-                    fonte_url=TABELAS_SPED[tabela_id]['url_download'],
-                    ativo=True,
-                )
-                db.session.add(novo)
-                inseridos += 1
-
-    db.session.commit()
-    return inseridos, atualizados
+    return {'status': status, 'inseridos': inseridos,
+            'atualizados': atualizados, 'mensagem': mensagem}

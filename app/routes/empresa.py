@@ -1,9 +1,16 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa, UsuarioEmpresa
+from app.models.consulta import Consulta
 
 empresa_bp = Blueprint('empresa', __name__)
+
+
+def _checar_acesso(empresa):
+    """Aborta com 403 se o usuário não tiver acesso à empresa."""
+    if not current_user.is_admin and empresa not in current_user.empresas:
+        abort(403)
 
 
 @empresa_bp.route('/')
@@ -12,7 +19,7 @@ def lista():
     if current_user.is_admin:
         empresas = Empresa.query.filter_by(ativo=True).order_by(Empresa.razao_social).all()
     else:
-        empresas = current_user.empresas
+        empresas = [e for e in current_user.empresas if e.ativo]
     return render_template('empresa/lista.html', empresas=empresas)
 
 
@@ -31,7 +38,6 @@ def nova():
             flash('Preencha todos os campos obrigatórios.', 'danger')
             return render_template('empresa/form.html', empresa=None)
 
-        # Remover formatação do CNPJ
         cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '')
 
         if Empresa.query.filter_by(cnpj=cnpj_limpo).first():
@@ -61,7 +67,6 @@ def nova():
         db.session.add(empresa)
         db.session.flush()
 
-        # Vincular empresa ao usuário atual
         vinculo = UsuarioEmpresa(usuario_id=current_user.id, empresa_id=empresa.id)
         db.session.add(vinculo)
         db.session.commit()
@@ -75,8 +80,8 @@ def nova():
 @empresa_bp.route('/<int:id>')
 @login_required
 def detalhe(id):
-    from app.models.consulta import Consulta
     empresa = db.get_or_404(Empresa, id)
+    _checar_acesso(empresa)
     consultas_recentes = (Consulta.query
                           .filter_by(empresa_id=empresa.id)
                           .order_by(Consulta.created_at.desc())
@@ -90,6 +95,8 @@ def detalhe(id):
 @login_required
 def editar(id):
     empresa = db.get_or_404(Empresa, id)
+    _checar_acesso(empresa)
+
     if request.method == 'POST':
         empresa.razao_social = request.form.get('razao_social', empresa.razao_social).strip()
         empresa.nome_fantasia = request.form.get('nome_fantasia', '').strip()
@@ -116,6 +123,7 @@ def editar(id):
 @login_required
 def desativar(id):
     empresa = db.get_or_404(Empresa, id)
+    _checar_acesso(empresa)
     empresa.ativo = False
     db.session.commit()
     flash(f'Empresa "{empresa.razao_social}" desativada.', 'warning')
@@ -126,8 +134,10 @@ def desativar(id):
 @login_required
 def historico_empresa(id):
     empresa = db.get_or_404(Empresa, id)
+    _checar_acesso(empresa)
     page = request.args.get('page', 1, type=int)
-    consultas = empresa.consultas.order_by(
-        empresa.consultas.property.mapper.class_.created_at.desc()
-    ).paginate(page=page, per_page=20)
+    consultas = (Consulta.query
+                 .filter_by(empresa_id=empresa.id)
+                 .order_by(Consulta.created_at.desc())
+                 .paginate(page=page, per_page=20))
     return render_template('empresa/historico.html', empresa=empresa, consultas=consultas)

@@ -55,6 +55,16 @@ def create_app(config_name=None):
     def load_user(user_id):
         return db.session.get(Usuario, int(user_id))
 
+    # Handlers de erro
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('403.html'), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        from flask import render_template as rt
+        return rt('403.html'), 404  # reutiliza layout simples
+
     # Registrar comando seed
     from app.commands import register_commands
     register_commands(app)

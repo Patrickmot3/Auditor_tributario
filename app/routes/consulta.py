@@ -1,11 +1,27 @@
 import os
 from flask import (Blueprint, render_template, redirect, url_for,
-                   flash, request, session, current_app, send_file)
+                   flash, request, session, current_app, send_file, abort)
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa
 from app.models.consulta import Consulta, LoteConsulta
 from app.services.ncm_validator import validar_ncm, _normalizar_ncm
+
+
+def _checar_acesso_empresa(empresa_id):
+    """Retorna a empresa ou aborta 403 se o usuário não tiver acesso."""
+    empresa = db.get_or_404(Empresa, empresa_id)
+    if not current_user.is_admin and empresa not in current_user.empresas:
+        abort(403)
+    return empresa
+
+
+def _checar_acesso_consulta(consulta):
+    """Aborta 403 se o usuário não tem acesso à empresa da consulta."""
+    if not current_user.is_admin:
+        ids = [e.id for e in current_user.empresas]
+        if consulta.empresa_id not in ids:
+            abort(403)
 
 consulta_bp = Blueprint('consulta', __name__)
 
@@ -184,6 +200,7 @@ def historico():
 @login_required
 def detalhe(id):
     consulta = db.get_or_404(Consulta, id)
+    _checar_acesso_consulta(consulta)
     return render_template('consulta/detalhe.html', consulta=consulta)
 
 
