@@ -4,7 +4,13 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h5><i class="bi bi-bar-chart"></i> Relatório de Processamento
-    {% if tipo == 'excel' %}<span class="badge bg-success ms-2">Excel</span>{% else %}<span class="badge bg-primary ms-2">XML NF-e</span>{% endif %}
+    {% if tipo == 'excel' %}
+      <span class="badge bg-success ms-2">Excel</span>
+    {% elif tipo == 'xml_lote' %}
+      <span class="badge bg-primary ms-2"><i class="bi bi-file-earmark-zip"></i> Lote XML</span>
+    {% else %}
+      <span class="badge bg-primary ms-2">XML NF-e</span>
+    {% endif %}
   </h5>
   <div class="d-flex gap-2">
     <a href="{{ url_for('consulta.exportar', empresa_id=empresa.id if empresa else '') }}" class="btn btn-sm btn-success">
@@ -24,6 +30,55 @@
       <div class="col-md-4"><small class="text-muted">Emitente</small><br><strong>{{ relatorio.razao_emitente }}</strong></div>
       <div class="col-md-2"><small class="text-muted">CNPJ Emitente</small><br>{{ relatorio.cnpj_emitente }}</div>
       <div class="col-md-3"><small class="text-muted">Data Emissão</small><br>{{ relatorio.data_emissao[:10] if relatorio.data_emissao else '—' }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if tipo == 'xml_lote' %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-file-earmark-zip"></i> Arquivo: <strong>{{ relatorio.arquivo_origem }}</strong></span>
+    <span class="badge bg-primary">{{ relatorio.total_arquivos }} NF-e(s) processada(s)</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Arquivo</th>
+            <th>Emitente</th>
+            <th>Data</th>
+            <th class="text-center">Itens</th>
+            <th class="text-center">Monofásicos</th>
+            <th class="text-center">Inconsistências</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for nota in relatorio.notas %}
+          <tr {% if nota.erro %}class="table-danger"{% elif nota.inconsistencias %}class="table-warning"{% endif %}>
+            <td class="font-monospace small">{{ nota.arquivo }}</td>
+            <td><small>{{ nota.razao_emitente or '—' }}</small></td>
+            <td><small>{{ nota.data_emissao[:10] if nota.data_emissao else '—' }}</small></td>
+            <td class="text-center">{{ nota.total }}</td>
+            <td class="text-center">
+              {% if nota.monofasicos %}<span class="badge bg-success">{{ nota.monofasicos }}</span>{% else %}0{% endif %}
+            </td>
+            <td class="text-center">
+              {% if nota.inconsistencias %}<span class="badge bg-warning text-dark">{{ nota.inconsistencias }}</span>{% else %}—{% endif %}
+            </td>
+            <td>
+              {% if nota.erro %}
+                <span class="badge bg-danger" title="{{ nota.erro }}">Erro</span>
+              {% else %}
+                <span class="badge bg-success">OK</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 </div>

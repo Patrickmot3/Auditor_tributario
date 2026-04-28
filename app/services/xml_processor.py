@@ -1,7 +1,12 @@
 """
 Serviço de importação de XML NF-e (versão 4.00).
+Suporta: XML único, múltiplos XMLs, ZIP com XMLs, RAR com XMLs.
 """
+import io
 import logging
+import os
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from xml.etree import ElementTree as ET
 from app.extensions import db
@@ -187,4 +192,130 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
         'nao_monofasicos': nao_monofasicos,
         'inconsistencias': inconsistencias,
         'itens': itens_resultado,
+    }
+
+
+# ─── Lote compactado (ZIP / RAR / múltiplos XMLs) ────────────────────────────
+
+def _extrair_xmls_zip(caminho: str) -> dict[str, bytes]:
+    """Extrai XMLs de um arquivo ZIP. Retorna {nome_arquivo: conteúdo}."""
+    xmls = {}
+    with zipfile.ZipFile(caminho) as z:
+        for nome in z.namelist():
+            # Ignora diretórios e arquivos não-XML
+            if nome.endswith('/') or not nome.lower().endswith('.xml'):
+                continue
+            xmls[os.path.basename(nome)] = z.read(nome)
+    return xmls
+
+
+def _extrair_xmls_rar(caminho: str) -> dict[str, bytes]:
+    """Extrai XMLs de um arquivo RAR. Requer binário 'unrar' no sistema."""
+    try:
+        import rarfile
+    except ImportError:
+        raise Exception('Biblioteca rarfile não disponível.')
+
+    try:
+        xmls = {}
+        with rarfile.RarFile(caminho) as r:
+            for info in r.infolist():
+                nome = info.filename
+                if not nome.lower().endswith('.xml'):
+                    continue
+                xmls[os.path.basename(nome)] = r.read(nome)
+        return xmls
+    except rarfile.BadRarFile:
+        raise Exception('Arquivo RAR inválido ou corrompido.')
+    except rarfile.RarCannotExec:
+        raise Exception(
+            'O binário "unrar" não está instalado no servidor. '
+            'Use arquivos ZIP no lugar de RAR.'
+        )
+
+
+def _processar_xml_bytes(conteudo: bytes, empresa_id: int) -> dict:
+    """Processa XML a partir de bytes, sem precisar de arquivo em disco."""
+    with tempfile.NamedTemporaryFile(suffix='.xml', delete=False) as tmp:
+        tmp.write(conteudo)
+        tmp_path = tmp.name
+    try:
+        return processar_xml_nfe(tmp_path, empresa_id)
+    finally:
+        os.unlink(tmp_path)
+
+
+def processar_lote_compactado(caminho: str, empresa_id: int, nome_arquivo: str) -> dict:
+    """
+    Processa um lote de XMLs NF-e a partir de:
+      - Arquivo ZIP contendo XMLs
+      - Arquivo RAR contendo XMLs
+    Retorna relatório agregado com resultado por NF-e.
+    """
+    ext = nome_arquivo.rsplit('.', 1)[-1].lower() if '.' in nome_arquivo else ''
+
+    # Extrair XMLs do compactado
+    if ext == 'zip':
+        try:
+            xmls = _extrair_xmls_zip(caminho)
+        except zipfile.BadZipFile:
+            return {'erro': 'Arquivo ZIP inválido ou corrompido.'}
+    elif ext == 'rar':
+        try:
+            xmls = _extrair_xmls_rar(caminho)
+        except Exception as e:
+            return {'erro': str(e)}
+    else:
+        return {'erro': f'Formato "{ext}" não suportado. Use ZIP ou RAR.'}
+
+    if not xmls:
+        return {'erro': 'Nenhum arquivo .xml encontrado dentro do compactado.'}
+
+    # Processar cada XML individualmente
+    total_geral = ok_geral = duplicados_geral = erros_geral = 0
+    monofasicos_geral = nao_monofasicos_geral = inconsistencias_geral = 0
+    notas = []
+
+    for nome_xml, conteudo in sorted(xmls.items()):
+        try:
+            resultado = _processar_xml_bytes(conteudo, empresa_id)
+        except Exception as e:
+            resultado = {
+                'erro': str(e),
+                'total': 0, 'ok': 0, 'duplicados': 0, 'erros': 1,
+                'monofasicos': 0, 'nao_monofasicos': 0, 'inconsistencias': 0,
+                'itens': [],
+            }
+
+        total_geral          += resultado.get('total', 0)
+        ok_geral             += resultado.get('ok', 0)
+        duplicados_geral     += resultado.get('duplicados', 0)
+        erros_geral          += resultado.get('erros', 0)
+        monofasicos_geral    += resultado.get('monofasicos', 0)
+        nao_monofasicos_geral+= resultado.get('nao_monofasicos', 0)
+        inconsistencias_geral+= resultado.get('inconsistencias', 0)
+
+        notas.append({
+            'arquivo': nome_xml,
+            'ch_nfe': resultado.get('ch_nfe', ''),
+            'razao_emitente': resultado.get('razao_emitente', ''),
+            'cnpj_emitente': resultado.get('cnpj_emitente', ''),
+            'data_emissao': resultado.get('data_emissao', ''),
+            'total': resultado.get('total', 0),
+            'monofasicos': resultado.get('monofasicos', 0),
+            'inconsistencias': resultado.get('inconsistencias', 0),
+            'erro': resultado.get('erro'),
+        })
+
+    return {
+        'arquivo_origem': nome_arquivo,
+        'total_arquivos': len(xmls),
+        'total': total_geral,
+        'ok': ok_geral,
+        'duplicados': duplicados_geral,
+        'erros': erros_geral,
+        'monofasicos': monofasicos_geral,
+        'nao_monofasicos': nao_monofasicos_geral,
+        'inconsistencias': inconsistencias_geral,
+        'notas': notas,
     }

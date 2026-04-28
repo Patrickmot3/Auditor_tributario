@@ -130,7 +130,7 @@ def lote_xml():
         arquivo = request.files.get('arquivo')
 
         if not empresa_id or not arquivo:
-            flash('Selecione a empresa e o arquivo XML.', 'warning')
+            flash('Selecione a empresa e o arquivo.', 'warning')
             return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
 
         session['empresa_id'] = empresa_id
@@ -138,19 +138,34 @@ def lote_xml():
 
         upload_dir = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         os.makedirs(upload_dir, exist_ok=True)
-        caminho = os.path.join(upload_dir, arquivo.filename)
+
+        nome_arquivo = arquivo.filename
+        ext = nome_arquivo.rsplit('.', 1)[-1].lower() if '.' in nome_arquivo else ''
+        caminho = os.path.join(upload_dir, nome_arquivo)
         arquivo.save(caminho)
 
-        from app.services.xml_processor import processar_xml_nfe
-        relatorio = processar_xml_nfe(caminho, empresa_id)
-        os.remove(caminho)
+        try:
+            if ext == 'xml':
+                from app.services.xml_processor import processar_xml_nfe
+                relatorio = processar_xml_nfe(caminho, empresa_id)
+                tipo_rel = 'xml'
+            elif ext in ('zip', 'rar'):
+                from app.services.xml_processor import processar_lote_compactado
+                relatorio = processar_lote_compactado(caminho, empresa_id, nome_arquivo)
+                tipo_rel = 'xml_lote'
+            else:
+                flash('Formato não suportado. Envie um arquivo .xml, .zip ou .rar.', 'danger')
+                return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
+        finally:
+            if os.path.exists(caminho):
+                os.remove(caminho)
 
         if 'erro' in relatorio:
             flash(f'Erro ao processar: {relatorio["erro"]}', 'danger')
             return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
 
         return render_template('consulta/lote_relatorio.html',
-                               empresa=empresa, relatorio=relatorio, tipo='xml')
+                               empresa=empresa, relatorio=relatorio, tipo=tipo_rel)
 
     return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
 

@@ -4,12 +4,13 @@
 {% block content %}
 <h5 class="mb-3"><i class="bi bi-file-earmark-code"></i> Importação de XML NF-e</h5>
 
-<div class="row">
-  <div class="col-md-6">
+<div class="row g-4">
+  <div class="col-md-7">
     <div class="card">
       <div class="card-body">
         <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <div class="mb-3">
             <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
             <select name="empresa_id" class="form-select" required>
@@ -21,22 +22,82 @@
               {% endfor %}
             </select>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Arquivo XML NF-e <span class="text-danger">*</span></label>
-            <input type="file" name="arquivo" class="form-control" accept=".xml" required>
+
+          <div class="mb-1">
+            <label class="form-label fw-semibold">Arquivo <span class="text-danger">*</span></label>
+            <input type="file" name="arquivo" id="arquivo" class="form-control"
+                   accept=".xml,.zip,.rar" required>
+            <div class="form-text" id="arquivo-hint">
+              Formatos aceitos: <strong>.xml</strong> (nota única),
+              <strong>.zip</strong> ou <strong>.rar</strong> (várias notas)
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-upload"></i> Processar XML
+
+          <!-- Preview dinâmico do arquivo selecionado -->
+          <div id="arquivo-preview" class="alert alert-secondary py-2 mt-2 d-none">
+            <i class="bi bi-file-earmark" id="arquivo-icone"></i>
+            <span id="arquivo-nome"></span>
+            <span class="badge ms-2" id="arquivo-badge"></span>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 mt-3">
+            <i class="bi bi-upload"></i> Processar
           </button>
         </form>
       </div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="alert alert-info">
-      <i class="bi bi-info-circle"></i> <strong>Compatível com NF-e versão 4.00</strong><br>
-      O sistema extrai todos os produtos da nota, valida cada NCM e detecta inconsistências de CST/COFINS/PIS.
+
+  <div class="col-md-5">
+    <div class="card border-info">
+      <div class="card-header text-info"><i class="bi bi-info-circle"></i> Como funciona</div>
+      <div class="card-body">
+        <ul class="mb-0 ps-3" style="font-size:.9rem;">
+          <li class="mb-2">
+            <strong>XML único</strong> — processa uma NF-e por vez, exibe resultado
+            item a item com CST sugerido.
+          </li>
+          <li class="mb-2">
+            <strong>ZIP com XMLs</strong> — importe um lote inteiro: basta compactar
+            os arquivos .xml em um ZIP e enviar. Ideal para exportações do emissor.
+          </li>
+          <li class="mb-2">
+            <strong>RAR com XMLs</strong> — mesmo fluxo do ZIP. Requer que o servidor
+            tenha o utilitário <code>unrar</code> instalado; se não disponível, use ZIP.
+          </li>
+          <li>
+            Compatible com NF-e versão 4.00. NCMs duplicados são atualizados,
+            nunca duplicados no histórico.
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('arquivo').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const preview  = document.getElementById('arquivo-preview');
+  const nomeEl   = document.getElementById('arquivo-nome');
+  const badgeEl  = document.getElementById('arquivo-badge');
+  const iconeEl  = document.getElementById('arquivo-icone');
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  const cfg = {
+    xml:  { icon: 'bi-file-earmark-code',    badge: 'XML único',     cls: 'bg-primary' },
+    zip:  { icon: 'bi-file-earmark-zip',     badge: 'Lote ZIP',      cls: 'bg-success' },
+    rar:  { icon: 'bi-file-earmark-zip-fill',badge: 'Lote RAR',      cls: 'bg-warning text-dark' },
+  }[ext] || { icon: 'bi-file-earmark', badge: ext.toUpperCase(), cls: 'bg-secondary' };
+
+  iconeEl.className = 'bi ' + cfg.icon + ' me-1';
+  nomeEl.textContent = file.name;
+  badgeEl.textContent = cfg.badge;
+  badgeEl.className = 'badge ms-2 ' + cfg.cls;
+  preview.classList.remove('d-none');
+});
+</script>
 {% endblock %}
