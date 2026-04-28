@@ -210,13 +210,66 @@ def _extrair_xmls_zip(caminho: str) -> dict[str, bytes]:
 
 
 def _extrair_xmls_rar(caminho: str) -> dict[str, bytes]:
-    """Extrai XMLs de um arquivo RAR. Requer binário 'unrar' no sistema."""
+    """
+    Extrai XMLs de um arquivo RAR.
+    Estratégia em cascata:
+      1. subprocess com unrar (se disponível)
+      2. subprocess com 7z / 7za / 7zr (p7zip)
+      3. rarfile via Python (último recurso)
+    """
+    import shutil
+    import subprocess
+
+    RAR_MAGIC = (b'Rar!\x1a\x07',)  # RAR3 e RAR5 começam com esses bytes
+
+    # Validar assinatura antes de tentar qualquer extração
+    with open(caminho, 'rb') as f:
+        header = f.read(8)
+    if not any(header.startswith(m) for m in RAR_MAGIC):
+        preview = header.hex()
+        raise Exception(
+            f'O arquivo não possui assinatura RAR válida (bytes: {preview}). '
+            'Verifique se o arquivo não está corrompido ou renomeado. Use ZIP.'
+        )
+
+    def _ler_xmls_de_dir(tmpdir: str) -> dict[str, bytes]:
+        xmls = {}
+        for fname in os.listdir(tmpdir):
+            if fname.lower().endswith('.xml'):
+                with open(os.path.join(tmpdir, fname), 'rb') as f:
+                    xmls[fname] = f.read()
+        return xmls
+
+    # Tentar extração via subprocess (mais robusto que a lib rarfile)
+    for tool in filter(None, [
+        shutil.which('unrar'),
+        shutil.which('7z'),
+        shutil.which('7za'),
+        shutil.which('7zr'),
+    ]):
+        try:
+            import tempfile as _tf
+            with _tf.TemporaryDirectory() as tmpdir:
+                if os.path.basename(tool) == 'unrar':
+                    cmd = [tool, 'e', '-y', '-inul', caminho, tmpdir]
+                else:
+                    cmd = [tool, 'e', caminho, f'-o{tmpdir}', '-y', '-bso0']
+                result = subprocess.run(cmd, capture_output=True, timeout=120)
+                if result.returncode == 0:
+                    xmls = _ler_xmls_de_dir(tmpdir)
+                    if xmls:
+                        logger.info(f'_extrair_xmls_rar: {len(xmls)} XMLs extraídos via {tool}')
+                        return xmls
+        except Exception as e:
+            logger.warning(f'_extrair_xmls_rar: {tool} falhou — {e}')
+
+    # Último recurso: rarfile (puro Python para leitura de índice + tool para extração)
     try:
         import rarfile
-    except ImportError:
-        raise Exception('Biblioteca rarfile não disponível.')
-
-    try:
+        unrar_bin = shutil.which('unrar') or shutil.which('7z') or shutil.which('7za')
+        if unrar_bin:
+            rarfile.UNRAR_TOOL = unrar_bin
+            rarfile.ALT_TOOL = unrar_bin
         xmls = {}
         with rarfile.RarFile(caminho) as r:
             for info in r.infolist():
@@ -225,12 +278,10 @@ def _extrair_xmls_rar(caminho: str) -> dict[str, bytes]:
                     continue
                 xmls[os.path.basename(nome)] = r.read(nome)
         return xmls
-    except rarfile.BadRarFile:
-        raise Exception('Arquivo RAR inválido ou corrompido.')
-    except rarfile.RarCannotExec:
+    except Exception as e:
         raise Exception(
-            'O binário "unrar" não está instalado no servidor. '
-            'Use arquivos ZIP no lugar de RAR.'
+            f'Não foi possível extrair o RAR ({e}). '
+            'Use ZIP no lugar de RAR — o servidor pode não ter o utilitário necessário.'
         )
 
 
