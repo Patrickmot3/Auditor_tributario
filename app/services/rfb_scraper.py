@@ -178,7 +178,8 @@ def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
     from bs4 import BeautifulSoup
 
     if conteudo[:2] != b'PK':
-        raise Exception('Conteúdo não é um arquivo ZIP')
+        logger.debug('_extrair_ncms_zip_xml: conteúdo não é ZIP, abortando silenciosamente')
+        return []
 
     resultado = []
     vistos = set()
@@ -253,6 +254,21 @@ def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
 # ─── Persistência ─────────────────────────────────────────────────────────────
 
 def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[int, int]:
+    from app.models.base_tributaria import AliquotaGrupo
+
+    # Busca alíquota vigente no banco; usa fallback hardcoded apenas se não houver
+    aliquota = AliquotaGrupo.vigente_para(grupo.id)
+    pis_fab = float(aliquota.pis_fabricante) if aliquota else 1.5
+    cofins_fab = float(aliquota.cofins_fabricante) if aliquota else 7.0
+    pis_var = float(aliquota.pis_varejista) if aliquota else 0.0
+    cofins_var = float(aliquota.cofins_varejista) if aliquota else 0.0
+
+    if not aliquota:
+        logger.warning(
+            f'Tabela {tabela_id}: nenhuma AliquotaGrupo vigente para grupo {grupo.id}. '
+            'Usando valores padrão hardcoded.'
+        )
+
     inseridos = atualizados = 0
     for ncm_raw, descricao in pares:
         tipo_ref = 'ncm_exato' if len(ncm_raw) == 8 else f'posicao_{len(ncm_raw)}'
@@ -275,10 +291,10 @@ def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[i
                 cst_saida='04',
                 cfop_entrada_simples='1102',
                 cfop_saida_simples='5102',
-                pis_aliquota_fabricante=1.5,
-                cofins_aliquota_fabricante=7.0,
-                pis_aliquota_varejista=0.0,
-                cofins_aliquota_varejista=0.0,
+                pis_aliquota_fabricante=pis_fab,
+                cofins_aliquota_fabricante=cofins_fab,
+                pis_aliquota_varejista=pis_var,
+                cofins_aliquota_varejista=cofins_var,
                 vigencia_inicio=date.today(),
                 fonte_url=TABELAS_SPED[tabela_id]['url_download'],
                 ativo=True,
@@ -373,6 +389,9 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
                 logger.warning(f'Tabela {tabela_id}: {fn.__name__} falhou — {e}')
 
         if not pares:
+            # Log dos primeiros bytes para diagnóstico de formato desconhecido
+            preview = conteudo[:400].decode('utf-8', errors='replace').replace('\n', ' ').strip()
+            logger.error(f'Tabela {tabela_id}: preview do conteúdo recebido → {preview!r}')
             raise Exception(f'Nenhum NCM extraído da tabela {tabela_id}. Último erro: {ultimo_erro}')
 
         inseridos, atualizados = _salvar_ncms(pares, tabela_id, grupo)

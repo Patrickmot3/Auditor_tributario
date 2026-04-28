@@ -65,6 +65,12 @@ def create_app(config_name=None):
         from flask import render_template as rt
         return rt('403.html'), 404  # reutiliza layout simples
 
+    # Injetar variáveis globais nos templates
+    from datetime import date as _date
+    @app.context_processor
+    def inject_globals():
+        return {'today': _date.today()}
+
     # Registrar comando seed
     from app.commands import register_commands
     register_commands(app)

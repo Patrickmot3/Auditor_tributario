@@ -7,7 +7,7 @@ from flask import current_app
 from app.extensions import db
 from app.models.ncm import GrupoTributario, NcmTributario
 from app.models.usuario import Usuario
-from app.models.base_tributaria import LogAtualizacao
+from app.models.base_tributaria import LogAtualizacao, AliquotaGrupo
 
 
 GRUPOS = [
@@ -191,6 +191,38 @@ def register_commands(app):
                 inseridos += 1
         db.session.commit()
         click.echo(f'  Pneumáticos: {len(PNEUMATICOS_POSICOES)} posições processadas')
+
+        # --- Alíquotas iniciais por grupo (legislação vigente) ---
+        ALIQUOTAS_SEED = [
+            # (codigo_grupo, pis_fab, cofins_fab, pis_var, cofins_var, vigencia_inicio, lei)
+            ('G100', 1.50,  7.00,  0.0, 0.0, date(2002,  1,  1), 'Lei nº 10.485/2002 — Anexos I e II'),
+            ('G200', 5.08,  23.44, 0.0, 0.0, date(1998,  1,  1), 'Lei nº 9.718/1998'),
+            ('G300', 2.10,  9.90,  0.0, 0.0, date(2000,  1,  1), 'Lei nº 10.147/2000'),
+            ('G400', 1.86,  8.54,  0.0, 0.0, date(2015,  1,  1), 'Lei nº 13.097/2015'),
+            ('G500', 2.00,  9.50,  0.0, 0.0, date(2002,  1,  1), 'Lei nº 10.485/2002 — Art. 5º'),
+        ]
+        for cod, pis_f, cof_f, pis_v, cof_v, vig, lei in ALIQUOTAS_SEED:
+            gid = grupos_map.get(cod)
+            if not gid:
+                continue
+            existe = AliquotaGrupo.query.filter_by(
+                grupo_tributario_id=gid, vigencia_inicio=vig,
+            ).first()
+            if not existe:
+                db.session.add(AliquotaGrupo(
+                    grupo_tributario_id=gid,
+                    pis_fabricante=pis_f,
+                    cofins_fabricante=cof_f,
+                    pis_varejista=pis_v,
+                    cofins_varejista=cof_v,
+                    vigencia_inicio=vig,
+                    vigencia_fim=None,
+                    lei_referencia=lei,
+                    observacao='Alíquota inicial — seed do sistema',
+                    ativo=True,
+                ))
+        db.session.commit()
+        click.echo('  Alíquotas iniciais por grupo criadas.')
 
         # --- Usuário admin ---
         admin = Usuario.query.filter_by(email='admin@tribsync.com.br').first()

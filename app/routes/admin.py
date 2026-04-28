@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from functools import wraps
+from datetime import date
 from app.extensions import db
 from app.models.usuario import Usuario
-from app.models.base_tributaria import LogAtualizacao
+from app.models.base_tributaria import LogAtualizacao, AliquotaGrupo
 from app.models.empresa import Empresa
+from app.models.ncm import GrupoTributario
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -116,3 +118,92 @@ def logs():
         LogAtualizacao.data_importacao.desc()
     ).paginate(page=page, per_page=20)
     return render_template('admin/logs.html', logs=logs_pag)
+
+
+# ── Alíquotas por grupo/vigência ─────────────────────────────────────────────
+
+@admin_bp.route('/aliquotas')
+@login_required
+@admin_required
+def aliquotas():
+    grupos = GrupoTributario.query.order_by(GrupoTributario.codigo).all()
+    aliquotas_list = (
+        AliquotaGrupo.query
+        .join(GrupoTributario)
+        .order_by(GrupoTributario.codigo, AliquotaGrupo.vigencia_inicio.desc())
+        .all()
+    )
+    return render_template('admin/aliquotas.html', grupos=grupos, aliquotas=aliquotas_list)
+
+
+@admin_bp.route('/aliquotas/nova', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def nova_aliquota():
+    grupos = GrupoTributario.query.order_by(GrupoTributario.codigo).all()
+    if request.method == 'POST':
+        grupo_id = request.form.get('grupo_tributario_id', type=int)
+        try:
+            vigencia_inicio = date.fromisoformat(request.form.get('vigencia_inicio', ''))
+            vigencia_fim_raw = request.form.get('vigencia_fim', '').strip()
+            vigencia_fim = date.fromisoformat(vigencia_fim_raw) if vigencia_fim_raw else None
+
+            alq = AliquotaGrupo(
+                grupo_tributario_id=grupo_id,
+                pis_fabricante=float(request.form.get('pis_fabricante', 0)),
+                cofins_fabricante=float(request.form.get('cofins_fabricante', 0)),
+                pis_varejista=float(request.form.get('pis_varejista', 0)),
+                cofins_varejista=float(request.form.get('cofins_varejista', 0)),
+                vigencia_inicio=vigencia_inicio,
+                vigencia_fim=vigencia_fim,
+                lei_referencia=request.form.get('lei_referencia', '').strip(),
+                observacao=request.form.get('observacao', '').strip(),
+                ativo=True,
+            )
+            db.session.add(alq)
+            db.session.commit()
+            flash('Alíquota cadastrada com sucesso!', 'success')
+            return redirect(url_for('admin.aliquotas'))
+        except (ValueError, TypeError) as e:
+            flash(f'Dados inválidos: {e}', 'danger')
+
+    return render_template('admin/aliquota_form.html', grupos=grupos, aliquota=None)
+
+
+@admin_bp.route('/aliquotas/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_aliquota(id):
+    alq = db.get_or_404(AliquotaGrupo, id)
+    grupos = GrupoTributario.query.order_by(GrupoTributario.codigo).all()
+    if request.method == 'POST':
+        try:
+            alq.grupo_tributario_id = request.form.get('grupo_tributario_id', type=int)
+            alq.pis_fabricante = float(request.form.get('pis_fabricante', 0))
+            alq.cofins_fabricante = float(request.form.get('cofins_fabricante', 0))
+            alq.pis_varejista = float(request.form.get('pis_varejista', 0))
+            alq.cofins_varejista = float(request.form.get('cofins_varejista', 0))
+            alq.vigencia_inicio = date.fromisoformat(request.form.get('vigencia_inicio', ''))
+            vigencia_fim_raw = request.form.get('vigencia_fim', '').strip()
+            alq.vigencia_fim = date.fromisoformat(vigencia_fim_raw) if vigencia_fim_raw else None
+            alq.lei_referencia = request.form.get('lei_referencia', '').strip()
+            alq.observacao = request.form.get('observacao', '').strip()
+            alq.ativo = bool(request.form.get('ativo'))
+            db.session.commit()
+            flash('Alíquota atualizada!', 'success')
+            return redirect(url_for('admin.aliquotas'))
+        except (ValueError, TypeError) as e:
+            flash(f'Dados inválidos: {e}', 'danger')
+
+    return render_template('admin/aliquota_form.html', grupos=grupos, aliquota=alq)
+
+
+@admin_bp.route('/aliquotas/<int:id>/desativar', methods=['POST'])
+@login_required
+@admin_required
+def desativar_aliquota(id):
+    alq = db.get_or_404(AliquotaGrupo, id)
+    alq.ativo = False
+    db.session.commit()
+    flash('Alíquota desativada.', 'warning')
+    return redirect(url_for('admin.aliquotas'))

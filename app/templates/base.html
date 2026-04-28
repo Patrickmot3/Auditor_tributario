@@ -140,6 +140,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a href="{{ url_for('admin.aliquotas') }}" class="nav-link {% if 'aliquota' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-percent"></i> Alíquotas
+      </a>
+    </li>
+    <li class="nav-item">
       <a href="{{ url_for('admin.logs') }}" class="nav-link {% if request.endpoint == 'admin.logs' %}active{% endif %}">
         <i class="bi bi-journal-text"></i> Logs
       </a>

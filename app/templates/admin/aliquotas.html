@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Alíquotas PIS/COFINS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="mb-0"><i class="bi bi-percent"></i> Alíquotas PIS/COFINS por Grupo</h5>
+  <a href="{{ url_for('admin.nova_aliquota') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> Nova alíquota
+  </a>
+</div>
+
+<div class="alert alert-info">
+  <i class="bi bi-info-circle"></i>
+  As alíquotas vigentes são usadas automaticamente ao importar novas tabelas SPED.
+  Quando a legislação alterar as alíquotas, cadastre um novo registro com a data de início da vigência.
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead class="table-dark">
+      <tr>
+        <th>Grupo</th>
+        <th>PIS Fab. (%)</th>
+        <th>COFINS Fab. (%)</th>
+        <th>PIS Varej. (%)</th>
+        <th>COFINS Varej. (%)</th>
+        <th>Vigência início</th>
+        <th>Vigência fim</th>
+        <th>Lei</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for alq in aliquotas %}
+      <tr class="{{ 'table-success' if alq.ativo and (alq.vigencia_fim is none or alq.vigencia_fim >= today) else 'opacity-50' }}">
+        <td>
+          <span class="badge bg-secondary">{{ alq.grupo.codigo }}</span>
+          {{ alq.grupo.nome }}
+        </td>
+        <td>{{ '%g' % alq.pis_fabricante }}</td>
+        <td>{{ '%g' % alq.cofins_fabricante }}</td>
+        <td>{{ '%g' % alq.pis_varejista }}</td>
+        <td>{{ '%g' % alq.cofins_varejista }}</td>
+        <td>{{ alq.vigencia_inicio.strftime('%d/%m/%Y') }}</td>
+        <td>{{ alq.vigencia_fim.strftime('%d/%m/%Y') if alq.vigencia_fim else '—' }}</td>
+        <td><small class="text-muted">{{ (alq.lei_referencia or '')[:40] }}</small></td>
+        <td>
+          {% if not alq.ativo %}
+            <span class="badge bg-secondary">Inativo</span>
+          {% elif alq.vigencia_fim and alq.vigencia_fim < today %}
+            <span class="badge bg-warning text-dark">Expirado</span>
+          {% else %}
+            <span class="badge bg-success">Vigente</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <a href="{{ url_for('admin.editar_aliquota', id=alq.id) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-pencil"></i>
+          </a>
+          {% if alq.ativo %}
+          <form method="POST" action="{{ url_for('admin.desativar_aliquota', id=alq.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger"
+                    onclick="return confirm('Desativar esta alíquota?')">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">
+        Nenhuma alíquota cadastrada. <a href="{{ url_for('admin.nova_aliquota') }}">Cadastrar agora</a>.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Passa a data de hoje para Jinja2 (já disponível pelo context processor)
+</script>
+{% endblock %}
