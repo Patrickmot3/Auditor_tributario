@@ -7,7 +7,9 @@ from app.extensions import db, migrate, login_manager, csrf
 
 def create_app(config_name=None):
     if config_name is None:
-        config_name = os.environ.get('FLASK_ENV', 'development')
+        env = os.environ.get('FLASK_ENV', 'development')
+        # Railway define FLASK_ENV=production, mas aceita também "production"
+        config_name = env if env in ('development', 'production') else 'development'
 
     app = Flask(__name__)
     app.config.from_object(config.get(config_name, config['default']))

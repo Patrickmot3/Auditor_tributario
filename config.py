@@ -4,13 +4,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _database_url():
+    url = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/tribsync')
+    # Railway usa "postgres://" em algumas variáveis; SQLAlchemy 2.x exige "postgresql://"
+    if url.startswith('postgres://'):
+        url = url.replace('postgres://', 'postgresql://', 1)
+    return url
+
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-fallback-key')
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/tribsync')
+    SQLALCHEMY_DATABASE_URI = _database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
+        'connect_args': {'connect_timeout': 10},
     }
     SCHEDULER_ENABLED = os.environ.get('SCHEDULER_ENABLED', 'true').lower() == 'true'
     SCHEDULER_TIMEZONE = os.environ.get('SCHEDULER_TIMEZONE', 'America/Sao_Paulo')
