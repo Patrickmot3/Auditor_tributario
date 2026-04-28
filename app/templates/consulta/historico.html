@@ -73,7 +73,7 @@
           <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">{{ c.ncm_consultado }}</a>
         </td>
         <td><small>{{ c.empresa.razao_social if c.empresa else '—' }}</small></td>
-        <td><small class="text-muted">{{ (c.descricao_produto or '')[:40] }}{% if c.descricao_produto and c.descricao_produto|length > 40 %}...{% endif %}</small></td>
+        <td><small>{{ (c.descricao_produto or '')[:40] }}{% if c.descricao_produto and c.descricao_produto|length > 40 %}...{% endif %}</small></td>
         <td>
           {% if c.monofasico %}
             <span class="badge bg-success">Sim</span>

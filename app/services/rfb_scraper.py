@@ -332,6 +332,55 @@ def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
     return resultado
 
 
+# Capítulos TIPI válidos por código de tabela SPED (regime monofásico)
+_CAPITULOS_VALIDOS = {
+    '4.3.10': {'40', '68', '70', '73', '83', '84', '85', '87', '90', '91', '94'},  # Autopeças
+    '4.3.13': {'30', '33', '34', '35', '38', '40', '48', '84', '85', '87', '89', '90'},  # Fármacos/Perfumaria
+    '4.3.15': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias + embalagens
+}
+
+# Faixa de anos que não são NCMs válidos (ex-anos extraídos de notas de rodapé)
+_ANO_MIN, _ANO_MAX = 1900, 2050
+
+
+def _ncm_valido(ncm_raw: str, tabela_id: str) -> bool:
+    """Retorna True se o NCM extraído parece um código real da TIPI para a tabela."""
+    n = len(ncm_raw)
+    if n < 4 or n > 8:
+        return False
+
+    # Rejeita 4 dígitos que se encaixam em faixa de anos (ex: 2003, 2015, 1998)
+    if n == 4:
+        try:
+            valor = int(ncm_raw)
+            if _ANO_MIN <= valor <= _ANO_MAX:
+                logger.debug(f'NCM rejeitado (parece ano): {ncm_raw}')
+                return False
+        except ValueError:
+            return False
+
+    # Rejeita 8 dígitos no formato DDMMAAAA (datas como 01042014)
+    if n == 8:
+        try:
+            dd, mm = int(ncm_raw[:2]), int(ncm_raw[2:4])
+            ano = int(ncm_raw[4:])
+            if 1 <= dd <= 31 and 1 <= mm <= 12 and _ANO_MIN <= ano <= _ANO_MAX:
+                logger.debug(f'NCM rejeitado (parece data DD/MM/AAAA): {ncm_raw}')
+                return False
+        except ValueError:
+            pass
+
+    # Valida capítulo TIPI vs tabela esperada
+    capitulos_ok = _CAPITULOS_VALIDOS.get(tabela_id)
+    if capitulos_ok:
+        capitulo = ncm_raw[:2]
+        if capitulo not in capitulos_ok:
+            logger.debug(f'NCM rejeitado (capítulo {capitulo} inválido para tabela {tabela_id}): {ncm_raw}')
+            return False
+
+    return True
+
+
 # ─── Persistência ─────────────────────────────────────────────────────────────
 
 def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[int, int]:
@@ -350,8 +399,12 @@ def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[i
             'Usando valores padrão hardcoded.'
         )
 
-    inseridos = atualizados = 0
+    inseridos = atualizados = rejeitados = 0
     for ncm_raw, descricao in pares:
+        if not _ncm_valido(ncm_raw, tabela_id):
+            rejeitados += 1
+            continue
+
         tipo_ref = 'ncm_exato' if len(ncm_raw) == 8 else f'posicao_{len(ncm_raw)}'
         existente = NcmTributario.query.filter_by(
             ncm=ncm_raw, grupo_tributario_id=grupo.id,
@@ -381,6 +434,9 @@ def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[i
                 ativo=True,
             ))
             inseridos += 1
+
+    if rejeitados:
+        logger.info(f'Tabela {tabela_id}: {rejeitados} NCMs rejeitados por validação de capítulo/formato')
     db.session.commit()
     return inseridos, atualizados
 
