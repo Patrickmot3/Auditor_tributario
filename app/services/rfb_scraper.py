@@ -489,19 +489,24 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
         status = 'erro'
         mensagem = str(e)
         logger.error(f'Erro ao atualizar tabela {tabela_id}: {e}')
+        db.session.rollback()  # sessão pode estar suja; limpar antes de gravar o log
 
-    db.session.add(LogAtualizacao(
-        tabela_sped=tabela_id,
-        versao=versao_rfb,
-        data_atualizacao_rfb=date.today(),
-        data_importacao=datetime.now(timezone.utc),
-        status=status,
-        registros_inseridos=inseridos,
-        registros_atualizados=atualizados,
-        mensagem=mensagem,
-        executado_por=executado_por,
-    ))
-    db.session.commit()
+    try:
+        db.session.add(LogAtualizacao(
+            tabela_sped=tabela_id,
+            versao=versao_rfb,
+            data_atualizacao_rfb=date.today(),
+            data_importacao=datetime.now(timezone.utc),
+            status=status,
+            registros_inseridos=inseridos,
+            registros_atualizados=atualizados,
+            mensagem=mensagem,
+            executado_por=executado_por,
+        ))
+        db.session.commit()
+    except Exception as log_err:
+        logger.error(f'Falha ao gravar log de atualização para {tabela_id}: {log_err}')
+        db.session.rollback()
 
     return {'status': status, 'inseridos': inseridos,
             'atualizados': atualizados, 'mensagem': mensagem}

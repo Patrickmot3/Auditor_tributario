@@ -50,7 +50,8 @@ class NcmTributario(db.Model):
     grupo = db.relationship('GrupoTributario', back_populates='ncms')
 
     __table_args__ = (
-        db.UniqueConstraint('ncm', 'vigencia_inicio', name='unique_ncm_vigencia'),
+        db.UniqueConstraint('ncm', 'grupo_tributario_id', 'vigencia_inicio',
+                            name='unique_ncm_grupo_vigencia'),
     )
 
     def __repr__(self):
