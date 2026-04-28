@@ -6,70 +6,99 @@
 
 <div class="row g-4">
   <div class="col-md-7">
-    <div class="card">
-      <div class="card-body">
-        <form method="POST" enctype="multipart/form-data">
+
+    <!-- Seletor de empresa (compartilhado pelos dois modos) -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
+      <select id="empresa_id_shared" class="form-select" required>
+        <option value="">Selecione...</option>
+        {% for e in empresas %}
+          <option value="{{ e.id }}" {% if empresa and e.id == empresa.id %}selected{% endif %}>
+            {{ e.razao_social }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Abas -->
+    <ul class="nav nav-tabs mb-0" id="modoTabs" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-multiplos">
+          <i class="bi bi-files"></i> Vários XMLs
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-zip">
+          <i class="bi bi-file-earmark-zip"></i> ZIP
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 rounded-bottom p-3 bg-body">
+
+      <!-- ABA 1: múltiplos XMLs -->
+      <div class="tab-pane fade show active" id="tab-multiplos">
+        <form method="POST" enctype="multipart/form-data" id="form-multiplos">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="empresa_id" id="empresa_id_m">
 
           <div class="mb-3">
-            <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
-            <select name="empresa_id" class="form-select" required>
-              <option value="">Selecione...</option>
-              {% for e in empresas %}
-                <option value="{{ e.id }}" {% if empresa and e.id == empresa.id %}selected{% endif %}>
-                  {{ e.razao_social }}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="mb-1">
-            <label class="form-label fw-semibold">Arquivo <span class="text-danger">*</span></label>
-            <input type="file" name="arquivo" id="arquivo" class="form-control"
-                   accept=".xml,.zip,.rar" required>
-            <div class="form-text" id="arquivo-hint">
-              Formatos aceitos: <strong>.xml</strong> (nota única),
-              <strong>.zip</strong> ou <strong>.rar</strong> (várias notas)
+            <label class="form-label fw-semibold">
+              Arquivos XML <span class="text-danger">*</span>
+              <small class="text-muted fw-normal">(selecione quantos quiser)</small>
+            </label>
+            <input type="file" name="xmls" id="xmls-input" class="form-control"
+                   accept=".xml" multiple required>
+            <div id="xmls-preview" class="mt-2 text-muted small d-none">
+              <i class="bi bi-check-circle text-success"></i>
+              <span id="xmls-count"></span>
             </div>
           </div>
 
-          <!-- Preview dinâmico do arquivo selecionado -->
-          <div id="arquivo-preview" class="alert alert-secondary py-2 mt-2 d-none">
-            <i class="bi bi-file-earmark" id="arquivo-icone"></i>
-            <span id="arquivo-nome"></span>
-            <span class="badge ms-2" id="arquivo-badge"></span>
-          </div>
-
-          <button type="submit" class="btn btn-primary w-100 mt-3">
-            <i class="bi bi-upload"></i> Processar
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-upload"></i> Processar XMLs
           </button>
         </form>
       </div>
-    </div>
+
+      <!-- ABA 2: ZIP -->
+      <div class="tab-pane fade" id="tab-zip">
+        <form method="POST" enctype="multipart/form-data" id="form-zip">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="empresa_id" id="empresa_id_z">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Arquivo ZIP <span class="text-danger">*</span>
+            </label>
+            <input type="file" name="arquivo" class="form-control"
+                   accept=".zip,.xml" required>
+            <div class="form-text">Aceita .zip (com vários XMLs dentro) ou um .xml único.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-upload"></i> Processar ZIP
+          </button>
+        </form>
+      </div>
+
+    </div><!-- tab-content -->
   </div>
 
   <div class="col-md-5">
-    <div class="card border-info">
+    <div class="card border-info h-100">
       <div class="card-header text-info"><i class="bi bi-info-circle"></i> Como funciona</div>
       <div class="card-body">
-        <ul class="mb-0 ps-3" style="font-size:.9rem;">
-          <li class="mb-2">
-            <strong>XML único</strong> — processa uma NF-e por vez, exibe resultado
-            item a item com CST sugerido.
-          </li>
-          <li class="mb-2">
-            <strong>ZIP com XMLs</strong> — importe um lote inteiro: basta compactar
-            os arquivos .xml em um ZIP e enviar. Ideal para exportações do emissor.
-          </li>
-          <li class="mb-2">
-            <strong>RAR com XMLs</strong> — mesmo fluxo do ZIP. Requer que o servidor
-            tenha o utilitário <code>unrar</code> instalado; se não disponível, use ZIP.
-          </li>
-          <li>
-            Compatible com NF-e versão 4.00. NCMs duplicados são atualizados,
-            nunca duplicados no histórico.
-          </li>
-        </ul>
+        <p class="fw-semibold mb-1"><i class="bi bi-files text-primary"></i> Vários XMLs</p>
+        <p class="text-muted small mb-3">
+          Selecione todos os XMLs de uma vez no seletor de arquivos
+          (Ctrl+clique ou Ctrl+A). Não precisa compactar.
+        </p>
+        <p class="fw-semibold mb-1"><i class="bi bi-file-earmark-zip text-success"></i> ZIP</p>
+        <p class="text-muted small mb-0">
+          Compacte os XMLs em um arquivo .zip e envie. Ideal quando
+          os arquivos já vierem empacotados pelo emissor ou contador.
+        </p>
       </div>
     </div>
   </div>
@@ -78,26 +107,39 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('arquivo').addEventListener('change', function () {
-  const file = this.files[0];
-  if (!file) return;
-  const preview  = document.getElementById('arquivo-preview');
-  const nomeEl   = document.getElementById('arquivo-nome');
-  const badgeEl  = document.getElementById('arquivo-badge');
-  const iconeEl  = document.getElementById('arquivo-icone');
+  // Sincroniza empresa_id nos dois formulários
+  const empresaSel = document.getElementById('empresa_id_shared');
+  empresaSel.addEventListener('change', () => {
+    document.getElementById('empresa_id_m').value = empresaSel.value;
+    document.getElementById('empresa_id_z').value = empresaSel.value;
+  });
+  // Inicializa com valor já selecionado
+  document.getElementById('empresa_id_m').value = empresaSel.value;
+  document.getElementById('empresa_id_z').value = empresaSel.value;
 
-  const ext = file.name.split('.').pop().toLowerCase();
-  const cfg = {
-    xml:  { icon: 'bi-file-earmark-code',    badge: 'XML único',     cls: 'bg-primary' },
-    zip:  { icon: 'bi-file-earmark-zip',     badge: 'Lote ZIP',      cls: 'bg-success' },
-    rar:  { icon: 'bi-file-earmark-zip-fill',badge: 'Lote RAR',      cls: 'bg-warning text-dark' },
-  }[ext] || { icon: 'bi-file-earmark', badge: ext.toUpperCase(), cls: 'bg-secondary' };
+  // Preview de quantidade de XMLs selecionados
+  document.getElementById('xmls-input').addEventListener('change', function () {
+    const preview = document.getElementById('xmls-preview');
+    const count   = document.getElementById('xmls-count');
+    if (this.files.length > 0) {
+      count.textContent = `${this.files.length} arquivo(s) selecionado(s)`;
+      preview.classList.remove('d-none');
+    } else {
+      preview.classList.add('d-none');
+    }
+  });
 
-  iconeEl.className = 'bi ' + cfg.icon + ' me-1';
-  nomeEl.textContent = file.name;
-  badgeEl.textContent = cfg.badge;
-  badgeEl.className = 'badge ms-2 ' + cfg.cls;
-  preview.classList.remove('d-none');
-});
+  // Valida empresa antes de submeter qualquer form
+  ['form-multiplos', 'form-zip'].forEach(id => {
+    document.getElementById(id).addEventListener('submit', function (e) {
+      if (!empresaSel.value) {
+        e.preventDefault();
+        empresaSel.focus();
+        empresaSel.classList.add('is-invalid');
+      } else {
+        empresaSel.classList.remove('is-invalid');
+      }
+    });
+  });
 </script>
 {% endblock %}

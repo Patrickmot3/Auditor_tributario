@@ -127,34 +127,82 @@ def lote_xml():
 
     if request.method == 'POST':
         empresa_id = request.form.get('empresa_id', type=int)
-        arquivo = request.files.get('arquivo')
-
-        if not empresa_id or not arquivo:
-            flash('Selecione a empresa e o arquivo.', 'warning')
+        if not empresa_id:
+            flash('Selecione uma empresa.', 'warning')
             return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
 
         session['empresa_id'] = empresa_id
         empresa = db.session.get(Empresa, empresa_id)
-
         upload_dir = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         os.makedirs(upload_dir, exist_ok=True)
 
-        nome_arquivo = arquivo.filename
+        from app.services.xml_processor import (
+            processar_xml_nfe, processar_lote_compactado, _processar_xml_bytes,
+        )
+
+        # ── Modo 1: múltiplos XMLs selecionados diretamente ──────────────────
+        arquivos_xml = request.files.getlist('xmls')
+        arquivos_xml = [f for f in arquivos_xml if f and f.filename.lower().endswith('.xml')]
+
+        if arquivos_xml:
+            total = ok = duplicados = erros = monofasicos = nao_monofasicos = inconsistencias = 0
+            notas = []
+            for arq in arquivos_xml:
+                conteudo = arq.read()
+                try:
+                    res = _processar_xml_bytes(conteudo, empresa_id)
+                except Exception as e:
+                    res = {'erro': str(e), 'total': 0, 'ok': 0, 'duplicados': 0,
+                           'erros': 1, 'monofasicos': 0, 'nao_monofasicos': 0,
+                           'inconsistencias': 0}
+                total           += res.get('total', 0)
+                ok              += res.get('ok', 0)
+                duplicados      += res.get('duplicados', 0)
+                erros           += res.get('erros', 0)
+                monofasicos     += res.get('monofasicos', 0)
+                nao_monofasicos += res.get('nao_monofasicos', 0)
+                inconsistencias += res.get('inconsistencias', 0)
+                notas.append({
+                    'arquivo': arq.filename,
+                    'ch_nfe': res.get('ch_nfe', ''),
+                    'razao_emitente': res.get('razao_emitente', ''),
+                    'cnpj_emitente': res.get('cnpj_emitente', ''),
+                    'data_emissao': res.get('data_emissao', ''),
+                    'total': res.get('total', 0),
+                    'monofasicos': res.get('monofasicos', 0),
+                    'inconsistencias': res.get('inconsistencias', 0),
+                    'erro': res.get('erro'),
+                })
+            relatorio = {
+                'arquivo_origem': f'{len(arquivos_xml)} arquivo(s) XML',
+                'total_arquivos': len(arquivos_xml),
+                'total': total, 'ok': ok, 'duplicados': duplicados, 'erros': erros,
+                'monofasicos': monofasicos, 'nao_monofasicos': nao_monofasicos,
+                'inconsistencias': inconsistencias, 'notas': notas,
+            }
+            return render_template('consulta/lote_relatorio.html',
+                                   empresa=empresa, relatorio=relatorio, tipo='xml_lote')
+
+        # ── Modo 2: ZIP (ou XML único) ────────────────────────────────────────
+        arquivo = request.files.get('arquivo')
+        if not arquivo or not arquivo.filename:
+            flash('Selecione os arquivos XML ou um ZIP.', 'warning')
+            return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
+
+        nome_arquivo = os.path.basename(arquivo.filename)
         ext = nome_arquivo.rsplit('.', 1)[-1].lower() if '.' in nome_arquivo else ''
         caminho = os.path.join(upload_dir, nome_arquivo)
         arquivo.save(caminho)
 
         try:
             if ext == 'xml':
-                from app.services.xml_processor import processar_xml_nfe
                 relatorio = processar_xml_nfe(caminho, empresa_id)
                 tipo_rel = 'xml'
-            elif ext in ('zip', 'rar'):
-                from app.services.xml_processor import processar_lote_compactado
+            elif ext == 'zip':
                 relatorio = processar_lote_compactado(caminho, empresa_id, nome_arquivo)
                 tipo_rel = 'xml_lote'
             else:
-                flash('Formato não suportado. Envie um arquivo .xml, .zip ou .rar.', 'danger')
+                flash('Formato não suportado. Use XML(s) ou ZIP.', 'danger')
                 return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
         finally:
             if os.path.exists(caminho):
