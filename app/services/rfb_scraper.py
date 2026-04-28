@@ -63,26 +63,34 @@ def _get_com_retry(url, tentativas=MAX_TENTATIVAS):
 
 # ─── Detecção de formato ──────────────────────────────────────────────────────
 
+_OLE2_MAGIC = b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'  # Assinatura XLS/DOC antigo (BIFF8)
+
+
 def _detectar_formato(conteudo: bytes, content_type: str) -> str:
     """
     Detecta o formato do arquivo retornado pela RFB.
-    Lê [Content_Types].xml dentro do ZIP para identificação definitiva.
-    Retorna: 'docx', 'xlsx', 'html' ou 'desconhecido'.
+    Ordem de confiança: magic bytes > [Content_Types].xml > Content-Type > texto.
+    Retorna: 'xls', 'xlsx', 'docx', 'html' ou 'desconhecido'.
     """
     ct = content_type.lower()
+
+    # OLE2 Compound Document (magic D0 CF 11 E0) → XLS ou DOC antigo
+    if conteudo[:8] == _OLE2_MAGIC:
+        # Distinguir XLS de DOC pelo Content-Type quando possível
+        if 'word' in ct or 'msword' in ct:
+            return 'doc_antigo'  # tratado como xls no fallback
+        return 'xls'
 
     # Arquivo ZIP (magic bytes PK) → DOCX ou XLSX
     if conteudo[:2] == b'PK':
         try:
             with zipfile.ZipFile(io.BytesIO(conteudo)) as z:
-                # Fonte mais confiável: [Content_Types].xml declara o tipo real
                 if '[Content_Types].xml' in z.namelist():
                     ct_xml = z.read('[Content_Types].xml').decode('utf-8', errors='ignore')
                     if 'wordprocessingml' in ct_xml:
                         return 'docx'
                     if 'spreadsheetml' in ct_xml:
                         return 'xlsx'
-                # Fallback por estrutura de pastas
                 nomes = z.namelist()
                 if any('xl/worksheets' in n or 'xl/workbook' in n for n in nomes):
                     return 'xlsx'
@@ -91,15 +99,17 @@ def _detectar_formato(conteudo: bytes, content_type: str) -> str:
         except Exception as e:
             logger.warning(f'Erro ao inspecionar ZIP: {e}')
 
-    # Content-Type do servidor como segundo critério
-    if 'spreadsheet' in ct or 'excel' in ct or 'xlsx' in ct or 'xls' in ct:
+    # Content-Type do servidor
+    if 'spreadsheet' in ct or 'excel' in ct or 'xlsx' in ct:
         return 'xlsx'
+    if 'ms-excel' in ct or ct.endswith('/xls'):
+        return 'xls'
     if 'word' in ct or 'docx' in ct or 'msword' in ct:
         return 'docx'
     if 'html' in ct or 'text/plain' in ct:
         return 'html'
 
-    # Tentar pelo conteúdo textual
+    # Último recurso: texto
     try:
         texto = conteudo[:200].decode('utf-8', errors='ignore').lower()
         if '<html' in texto or '<!doctype' in texto:
@@ -147,6 +157,32 @@ def _extrair_ncms_xlsx(conteudo: bytes) -> list[tuple[str, str]]:
             ncm_raw = str(row[0]).replace('.', '').replace('-', '').strip()
             if re.match(r'^\d{4,10}$', ncm_raw):
                 descricao = str(row[1]).strip() if len(row) > 1 and row[1] else ''
+                resultado.append((ncm_raw, descricao))
+    return resultado
+
+
+def _extrair_ncms_xls(conteudo: bytes) -> list[tuple[str, str]]:
+    """Extrai pares (ncm, descricao) de arquivo XLS antigo (BIFF8/OLE2) via xlrd."""
+    import xlrd
+    wb = xlrd.open_workbook(file_contents=conteudo)
+    resultado = []
+    for ws in wb.sheets():
+        for rx in range(ws.nrows):
+            row = ws.row(rx)
+            if not row:
+                continue
+            cel0 = row[0]
+            # xlrd retorna XL_CELL_FLOAT para números
+            if cel0.ctype == xlrd.XL_CELL_FLOAT:
+                ncm_raw = str(int(cel0.value))
+            elif cel0.ctype == xlrd.XL_CELL_TEXT:
+                ncm_raw = cel0.value.replace('.', '').replace('-', '').strip()
+            else:
+                continue
+            if re.match(r'^\d{4,10}$', ncm_raw):
+                descricao = ''
+                if len(row) > 1 and row[1].ctype == xlrd.XL_CELL_TEXT:
+                    descricao = row[1].value.strip()
                 resultado.append((ncm_raw, descricao))
     return resultado
 
@@ -369,12 +405,17 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
         logger.info(f'Tabela {tabela_id}: formato detectado = {fmt} | Content-Type = {content_type}')
 
         # Ordem de tentativa: formato detectado primeiro, depois os outros.
-        # _extrair_ncms_zip_xml é sempre o último fallback (lê o ZIP diretamente).
+        # _extrair_ncms_xls cobre arquivos BIFF8/OLE2 (xls antigo).
+        # _extrair_ncms_zip_xml é sempre o último fallback (lê ZIP diretamente).
+        _todos = [_extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_docx,
+                  _extrair_ncms_html, _extrair_ncms_zip_xml]
         ordem = {
-            'xlsx': [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml],
-            'docx': [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
-            'html': [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_zip_xml],
-        }.get(fmt, [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml])
+            'xls':       [_extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'doc_antigo':[_extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'xlsx':      [_extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'docx':      [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'html':      [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_docx, _extrair_ncms_zip_xml],
+        }.get(fmt, _todos)
 
         pares = []
         ultimo_erro = None
