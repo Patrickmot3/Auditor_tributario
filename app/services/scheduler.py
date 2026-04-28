@@ -15,6 +15,12 @@ def start_scheduler(app):
     if _scheduler and _scheduler.running:
         return
 
+    # Evitar iniciar scheduler em workers filhos do gunicorn (apenas no processo master)
+    import os
+    if os.environ.get('GUNICORN_WORKER'):
+        return
+    os.environ['GUNICORN_WORKER'] = '1'
+
     tz = pytz.timezone(app.config.get('SCHEDULER_TIMEZONE', 'America/Sao_Paulo'))
     _scheduler = BackgroundScheduler(timezone=tz)
 

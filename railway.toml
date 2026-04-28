@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "flask db upgrade && flask seed-db; gunicorn run:app --workers=2 --bind=0.0.0.0:$PORT"
+startCommand = "bash start.sh"
 healthcheckPath = "/api/v1/status"
-healthcheckTimeout = 60
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
