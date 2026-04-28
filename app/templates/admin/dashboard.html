@@ -44,7 +44,7 @@
             {% else %}<span class="badge bg-info">{{ log.status }}</span>{% endif %}
           </td>
           <td>{{ log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log.data_atualizacao_rfb else '—' }}</td>
-          <td>{{ log.data_importacao.strftime('%d/%m/%Y %H:%M') if log.data_importacao else '—' }}</td>
+          <td>{{ log.data_importacao | brt if log.data_importacao else '—' }}</td>
           <td><small class="text-muted">{{ (log.mensagem or '')[:60] }}</small></td>
         </tr>
         {% else %}

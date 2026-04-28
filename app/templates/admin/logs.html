@@ -23,7 +23,7 @@
         <td>{{ log.registros_inseridos or 0 }}</td>
         <td>{{ log.registros_atualizados or 0 }}</td>
         <td>{{ log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log.data_atualizacao_rfb else '—' }}</td>
-        <td>{{ log.data_importacao.strftime('%d/%m/%Y %H:%M') if log.data_importacao else '—' }}</td>
+        <td>{{ log.data_importacao | brt if log.data_importacao else '—' }}</td>
         <td><small>{{ log.executado_por or '—' }}</small></td>
         <td><small class="text-muted">{{ (log.mensagem or '')[:80] }}</small></td>
       </tr>

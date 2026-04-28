@@ -1,8 +1,18 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from functools import wraps
-from datetime import date
+from datetime import date, timezone, timedelta
 from app.extensions import db
+
+_BRT = timezone(timedelta(hours=-3))
+
+
+def _fmt_brt(dt, fmt='%d/%m/%Y %H:%M'):
+    if not dt:
+        return 'N/A'
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_BRT).strftime(fmt)
 from app.models.usuario import Usuario
 from app.models.base_tributaria import LogAtualizacao, AliquotaGrupo
 from app.models.empresa import Empresa
@@ -53,7 +63,7 @@ def atualizacao_status():
             'tabela': tabela,
             'versao': log.versao if log else 'N/A',
             'data_rfb': log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log and log.data_atualizacao_rfb else 'N/A',
-            'data_importacao': log.data_importacao.strftime('%d/%m/%Y %H:%M') if log else 'N/A',
+            'data_importacao': _fmt_brt(log.data_importacao) if log else 'N/A',
             'status': log.status if log else 'sem_dados',
         })
 

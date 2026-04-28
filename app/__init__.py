@@ -66,10 +66,22 @@ def create_app(config_name=None):
         return rt('403.html'), 404  # reutiliza layout simples
 
     # Injetar variáveis globais nos templates
-    from datetime import date as _date
+    from datetime import date as _date, timezone as _tz, timedelta as _td
+
+    _BRT = _tz(_td(hours=-3))
+
     @app.context_processor
     def inject_globals():
         return {'today': _date.today()}
+
+    @app.template_filter('brt')
+    def to_brt(dt, fmt='%d/%m/%Y %H:%M'):
+        """Converte datetime UTC para horário de Brasília (UTC-3) e formata."""
+        if dt is None:
+            return '—'
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
+        return dt.astimezone(_BRT).strftime(fmt)
 
     # Registrar comando seed
     from app.commands import register_commands
