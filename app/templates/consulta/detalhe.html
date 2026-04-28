@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Consulta {{ consulta.ncm_consultado }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5><i class="bi bi-file-text"></i> Detalhe da Consulta — <span class="font-monospace">{{ consulta.ncm_consultado }}</span></h5>
+  <a href="{{ url_for('consulta.historico') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Voltar
+  </a>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header">Dados do NCM</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5">NCM</dt><dd class="col-7 font-monospace">{{ consulta.ncm_consultado }}</dd>
+          <dt class="col-5">Descrição</dt><dd class="col-7">{{ consulta.descricao_produto or '—' }}</dd>
+          <dt class="col-5">Código Produto</dt><dd class="col-7">{{ consulta.codigo_produto or '—' }}</dd>
+          <dt class="col-5">Cód. CEST</dt><dd class="col-7">{{ consulta.codigo_cest or '—' }}</dd>
+          <dt class="col-5">Grupo Tributário</dt><dd class="col-7">{{ consulta.grupo_tributario or '—' }}</dd>
+          <dt class="col-5">Base Legal</dt><dd class="col-7">{{ consulta.lei_aplicada or '—' }}</dd>
+          <dt class="col-5">Monofásico</dt>
+          <dd class="col-7">
+            {% if consulta.monofasico %}
+              <span class="badge bg-success">Sim</span>
+            {% elif consulta.monofasico == false %}
+              <span class="badge bg-danger">Não</span>
+            {% else %}—{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header">Dados Tributários</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5">Empresa</dt><dd class="col-7">{{ consulta.empresa.razao_social if consulta.empresa else '—' }}</dd>
+          <dt class="col-5">Posição Cadeia</dt><dd class="col-7">{{ consulta.posicao_cadeia | title if consulta.posicao_cadeia else '—' }}</dd>
+          <dt class="col-5">CST Atual</dt><dd class="col-7 font-monospace">{{ consulta.cst_atual or '—' }}</dd>
+          <dt class="col-5">CST Sugerido</dt><dd class="col-7 font-monospace fw-bold">{{ consulta.cst_sugerido or '—' }}</dd>
+          <dt class="col-5">CFOP Sugerido</dt><dd class="col-7 font-monospace">{{ consulta.cfop_sugerido or '—' }}</dd>
+          <dt class="col-5">Alíquota PIS</dt><dd class="col-7">{{ "%.4f"|format(consulta.pis_aliquota|float) if consulta.pis_aliquota is not none else '—' }}%</dd>
+          <dt class="col-5">Alíquota COFINS</dt><dd class="col-7">{{ "%.4f"|format(consulta.cofins_aliquota|float) if consulta.cofins_aliquota is not none else '—' }}%</dd>
+          <dt class="col-5">Inconsistência</dt>
+          <dd class="col-7">
+            {% if consulta.inconsistencia_detectada %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Sim</span>
+            {% else %}
+              <span class="text-muted">Não</span>
+            {% endif %}
+          </dd>
+          <dt class="col-5">Data</dt><dd class="col-7">{{ consulta.created_at.strftime('%d/%m/%Y %H:%M') if consulta.created_at else '—' }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  {% if consulta.observacao %}
+  <div class="col-12">
+    <div class="alert alert-warning">
+      <i class="bi bi-info-circle"></i> <strong>Observação:</strong> {{ consulta.observacao }}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

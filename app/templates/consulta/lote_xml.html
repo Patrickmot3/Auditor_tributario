@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Importar XML NF-e{% endblock %}
+
+{% block content %}
+<h5 class="mb-3"><i class="bi bi-file-earmark-code"></i> Importação de XML NF-e</h5>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
+            <select name="empresa_id" class="form-select" required>
+              <option value="">Selecione...</option>
+              {% for e in empresas %}
+                <option value="{{ e.id }}" {% if empresa and e.id == empresa.id %}selected{% endif %}>
+                  {{ e.razao_social }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Arquivo XML NF-e <span class="text-danger">*</span></label>
+            <input type="file" name="arquivo" class="form-control" accept=".xml" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-upload"></i> Processar XML
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle"></i> <strong>Compatível com NF-e versão 4.00</strong><br>
+      O sistema extrai todos os produtos da nota, valida cada NCM e detecta inconsistências de CST/COFINS/PIS.
+    </div>
+  </div>
+</div>
+{% endblock %}

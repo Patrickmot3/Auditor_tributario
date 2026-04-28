@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Empresas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5><i class="bi bi-building"></i> Empresas Cadastradas</h5>
+  <a href="{{ url_for('empresa.nova') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle"></i> Nova Empresa
+  </a>
+</div>
+
+{% if empresas %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th>Razão Social</th><th>CNPJ</th><th>CNAE</th>
+        <th>Regime</th><th>Posição</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in empresas %}
+      <tr>
+        <td>
+          <a href="{{ url_for('empresa.detalhe', id=e.id) }}" class="text-decoration-none fw-semibold">
+            {{ e.razao_social }}
+          </a>
+          {% if e.nome_fantasia %}<br><small class="text-muted">{{ e.nome_fantasia }}</small>{% endif %}
+        </td>
+        <td class="font-monospace">{{ e.cnpj_formatado }}</td>
+        <td class="font-monospace">{{ e.cnae_principal }}</td>
+        <td><span class="badge bg-secondary">{{ e.regime_label }}</span></td>
+        <td>{{ e.posicao_label }}</td>
+        <td>
+          <a href="{{ url_for('empresa.editar', id=e.id) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <a href="{{ url_for('empresa.historico_empresa', id=e.id) }}" class="btn btn-sm btn-outline-info ms-1">
+            <i class="bi bi-clock-history"></i>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-building" style="font-size: 3rem; opacity: .3;"></i>
+  <p class="mt-3">Nenhuma empresa cadastrada.</p>
+  <a href="{{ url_for('empresa.nova') }}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Cadastrar empresa
+  </a>
+</div>
+{% endif %}
+{% endblock %}

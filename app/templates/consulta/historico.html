@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block title %}Histórico de Consultas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5><i class="bi bi-clock-history"></i> Histórico de Consultas</h5>
+  <a href="{{ url_for('consulta.exportar', empresa_id=empresa_id or '', monofasico=monofasico or '', inconsistencia=inconsistencia or '') }}"
+     class="btn btn-sm btn-success">
+    <i class="bi bi-file-earmark-excel"></i> Exportar
+  </a>
+</div>
+
+<!-- Filtros -->
+<form method="GET" class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-md-3">
+        <select name="empresa_id" class="form-select form-select-sm">
+          <option value="">Todas as empresas</option>
+          {% for e in empresas %}
+            <option value="{{ e.id }}" {% if empresa_id == e.id %}selected{% endif %}>{{ e.razao_social }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="monofasico" class="form-select form-select-sm">
+          <option value="">Monofásico: Todos</option>
+          <option value="1" {% if monofasico == '1' %}selected{% endif %}>Sim</option>
+          <option value="0" {% if monofasico == '0' %}selected{% endif %}>Não</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="inconsistencia" class="form-select form-select-sm">
+          <option value="">Inconsistência: Todas</option>
+          <option value="1" {% if inconsistencia == '1' %}selected{% endif %}>Sim</option>
+          <option value="0" {% if inconsistencia == '0' %}selected{% endif %}>Não</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="tipo" class="form-select form-select-sm">
+          <option value="">Tipo: Todos</option>
+          <option value="individual" {% if tipo_filtro == 'individual' %}selected{% endif %}>Individual</option>
+          <option value="excel" {% if tipo_filtro == 'excel' %}selected{% endif %}>Excel</option>
+          <option value="xml_nfe" {% if tipo_filtro == 'xml_nfe' %}selected{% endif %}>XML NF-e</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="ncm" class="form-control form-control-sm font-monospace"
+               placeholder="Filtrar NCM" value="{{ ncm_filtro or '' }}">
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">
+          <i class="bi bi-funnel"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th>NCM</th><th>Empresa</th><th>Produto</th>
+        <th>Monofásico</th><th>Grupo</th><th>CST</th>
+        <th>PIS%</th><th>COFINS%</th><th>Inconsistência</th><th>Data</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in consultas.items %}
+      <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.monofasico %}table-success{% endif %}">
+        <td class="font-monospace fw-bold">
+          <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">{{ c.ncm_consultado }}</a>
+        </td>
+        <td><small>{{ c.empresa.razao_social if c.empresa else '—' }}</small></td>
+        <td><small class="text-muted">{{ (c.descricao_produto or '')[:40] }}{% if c.descricao_produto and c.descricao_produto|length > 40 %}...{% endif %}</small></td>
+        <td>
+          {% if c.monofasico %}
+            <span class="badge bg-success">Sim</span>
+          {% elif c.monofasico == false %}
+            <span class="badge bg-danger">Não</span>
+          {% else %}—{% endif %}
+        </td>
+        <td><small>{{ c.grupo_tributario or '—' }}</small></td>
+        <td class="font-monospace">{{ c.cst_sugerido or '—' }}</td>
+        <td>{{ "%.4f"|format(c.pis_aliquota|float) if c.pis_aliquota is not none else '—' }}</td>
+        <td>{{ "%.4f"|format(c.cofins_aliquota|float) if c.cofins_aliquota is not none else '—' }}</td>
+        <td>
+          {% if c.inconsistencia_detectada %}
+            <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+          {% else %}—{% endif %}
+        </td>
+        <td><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">Nenhuma consulta encontrada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Paginação -->
+{% if consultas.pages > 1 %}
+<nav>
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if consultas.has_prev %}
+      <li class="page-item"><a class="page-link" href="?page={{ consultas.prev_num }}">«</a></li>
+    {% endif %}
+    {% for page_num in consultas.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+      {% if page_num %}
+        <li class="page-item {% if page_num == consultas.page %}active{% endif %}">
+          <a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a>
+        </li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+    {% if consultas.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ consultas.next_num }}">»</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Logs de Atualização{% endblock %}
+
+{% block content %}
+<h5 class="mb-3"><i class="bi bi-journal-text"></i> Logs de Atualização</h5>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead class="table-dark">
+      <tr><th>Tabela</th><th>Versão</th><th>Status</th><th>Inseridos</th><th>Atualizados</th><th>Data RFB</th><th>Importado em</th><th>Por</th><th>Mensagem</th></tr>
+    </thead>
+    <tbody>
+      {% for log in logs.items %}
+      <tr>
+        <td>{{ log.tabela_sped }}</td>
+        <td>{{ log.versao or '—' }}</td>
+        <td>
+          {% if log.status == 'sucesso' %}<span class="badge bg-success">Sucesso</span>
+          {% elif log.status == 'erro' %}<span class="badge bg-danger">Erro</span>
+          {% elif log.status == 'seed_inicial' %}<span class="badge bg-info">Seed</span>
+          {% else %}<span class="badge bg-secondary">{{ log.status }}</span>{% endif %}
+        </td>
+        <td>{{ log.registros_inseridos or 0 }}</td>
+        <td>{{ log.registros_atualizados or 0 }}</td>
+        <td>{{ log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log.data_atualizacao_rfb else '—' }}</td>
+        <td>{{ log.data_importacao.strftime('%d/%m/%Y %H:%M') if log.data_importacao else '—' }}</td>
+        <td><small>{{ log.executado_por or '—' }}</small></td>
+        <td><small class="text-muted">{{ (log.mensagem or '')[:80] }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-center text-muted">Nenhum log.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if logs.pages > 1 %}
+<nav>
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if logs.has_prev %}<li class="page-item"><a class="page-link" href="?page={{ logs.prev_num }}">«</a></li>{% endif %}
+    {% for p in logs.iter_pages() %}
+      {% if p %}<li class="page-item {% if p == logs.page %}active{% endif %}"><a class="page-link" href="?page={{ p }}">{{ p }}</a></li>
+      {% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+    {% endfor %}
+    {% if logs.has_next %}<li class="page-item"><a class="page-link" href="?page={{ logs.next_num }}">»</a></li>{% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

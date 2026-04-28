@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard Admin{% endblock %}
+
+{% block content %}
+<h5 class="mb-4"><i class="bi bi-speedometer2"></i> Painel Administrativo</h5>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card text-center border-primary">
+      <div class="card-body"><div class="fs-2 fw-bold text-primary">{{ total_empresas }}</div>
+      <div class="text-muted">Empresas ativas</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center border-success">
+      <div class="card-body"><div class="fs-2 fw-bold text-success">{{ total_consultas }}</div>
+      <div class="text-muted">Consultas realizadas</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center border-info">
+      <div class="card-body"><div class="fs-2 fw-bold text-info">{{ total_usuarios }}</div>
+      <div class="text-muted">Usuários ativos</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-journal-text"></i> Últimas atualizações de tabelas</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-dark">
+        <tr><th>Tabela</th><th>Versão</th><th>Status</th><th>Data RFB</th><th>Importado em</th><th>Mensagem</th></tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.tabela_sped }}</td>
+          <td>{{ log.versao or '—' }}</td>
+          <td>
+            {% if log.status == 'sucesso' %}<span class="badge bg-success">Sucesso</span>
+            {% elif log.status == 'erro' %}<span class="badge bg-danger">Erro</span>
+            {% elif log.status == 'sem_alteracoes' %}<span class="badge bg-secondary">Sem alterações</span>
+            {% else %}<span class="badge bg-info">{{ log.status }}</span>{% endif %}
+          </td>
+          <td>{{ log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log.data_atualizacao_rfb else '—' }}</td>
+          <td>{{ log.data_importacao.strftime('%d/%m/%Y %H:%M') if log.data_importacao else '—' }}</td>
+          <td><small class="text-muted">{{ (log.mensagem or '')[:60] }}</small></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted">Nenhum log.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Importar Excel{% endblock %}
+
+{% block content %}
+<h5 class="mb-3"><i class="bi bi-file-earmark-excel"></i> Importação de Planilha Excel</h5>
+
+<div class="row">
+  <div class="col-md-7">
+    <div class="card mb-4">
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
+            <select name="empresa_id" class="form-select" required>
+              <option value="">Selecione...</option>
+              {% for e in empresas %}
+                <option value="{{ e.id }}" {% if empresa and e.id == empresa.id %}selected{% endif %}>
+                  {{ e.razao_social }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Arquivo Excel (.xlsx/.xls) <span class="text-danger">*</span></label>
+            <input type="file" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-upload"></i> Processar Planilha
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Formato esperado</div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">A planilha deve conter as colunas (o sistema detecta automaticamente):</p>
+        <table class="table table-sm table-bordered">
+          <thead class="table-secondary"><tr>
+            <th>Coluna</th><th>Exemplo</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Código</td><td>PROD001</td></tr>
+            <tr><td>Descrição</td><td>Amortecedor traseiro</td></tr>
+            <tr><td>Tipo do Item</td><td>00</td></tr>
+            <tr><td>Cód. NBM</td><td>87084090</td></tr>
+            <tr><td><strong>Cód. NCM</strong></td><td><strong>87084090</strong></td></tr>
+            <tr><td>Cód. CEST</td><td>01.001.00</td></tr>
+          </tbody>
+        </table>
+        <small class="text-muted">A coluna NCM é obrigatória. As demais são opcionais.</small>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

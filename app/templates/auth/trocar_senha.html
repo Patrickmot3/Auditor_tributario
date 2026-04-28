@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Trocar Senha{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-key"></i> Trocar Senha</div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label">Senha atual</label>
+            <input type="password" name="senha_atual" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nova senha (mínimo 8 caracteres)</label>
+            <input type="password" name="nova_senha" class="form-control" required minlength="8">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirmar nova senha</label>
+            <input type="password" name="confirmacao" class="form-control" required minlength="8">
+          </div>
+          <button type="submit" class="btn btn-primary">Alterar senha</button>
+          <a href="{{ url_for('consulta.individual') }}" class="btn btn-secondary ms-2">Cancelar</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

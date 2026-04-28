@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Relatório de Processamento{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5><i class="bi bi-bar-chart"></i> Relatório de Processamento
+    {% if tipo == 'excel' %}<span class="badge bg-success ms-2">Excel</span>{% else %}<span class="badge bg-primary ms-2">XML NF-e</span>{% endif %}
+  </h5>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('consulta.exportar', empresa_id=empresa.id if empresa else '') }}" class="btn btn-sm btn-success">
+      <i class="bi bi-file-earmark-excel"></i> Exportar
+    </a>
+    <a href="{{ url_for('consulta.historico') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-clock-history"></i> Ver histórico
+    </a>
+  </div>
+</div>
+
+{% if tipo == 'xml' and relatorio.ch_nfe %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-md-3"><small class="text-muted">Chave NF-e</small><br><span class="font-monospace small">{{ relatorio.ch_nfe[:22] }}...</span></div>
+      <div class="col-md-4"><small class="text-muted">Emitente</small><br><strong>{{ relatorio.razao_emitente }}</strong></div>
+      <div class="col-md-2"><small class="text-muted">CNPJ Emitente</small><br>{{ relatorio.cnpj_emitente }}</div>
+      <div class="col-md-3"><small class="text-muted">Data Emissão</small><br>{{ relatorio.data_emissao[:10] if relatorio.data_emissao else '—' }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Cards de resumo -->
+<div class="row g-3 mb-4">
+  {% set cards = [
+    ('Total processado', relatorio.total, 'primary', 'list-ul'),
+    ('Monofásicos', relatorio.monofasicos, 'success', 'check-circle'),
+    ('Não Monofásicos', relatorio.nao_monofasicos, 'danger', 'x-circle'),
+    ('Inconsistências', relatorio.inconsistencias, 'warning', 'exclamation-triangle'),
+    ('Duplicados (atualizados)', relatorio.duplicados, 'info', 'arrow-repeat'),
+    ('Erros', relatorio.erros, 'secondary', 'bug'),
+  ] %}
+  {% for label, valor, cor, icon in cards %}
+  <div class="col-sm-4 col-lg-2">
+    <div class="card text-center border-{{ cor }}">
+      <div class="card-body p-2">
+        <i class="bi bi-{{ icon }} text-{{ cor }}"></i>
+        <div class="fs-4 fw-bold text-{{ cor }}">{{ valor }}</div>
+        <div class="text-muted" style="font-size:.75rem;">{{ label }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if relatorio.get('itens') %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead class="table-dark">
+      <tr>
+        <th>NCM</th><th>Produto</th><th>CST Atual</th>
+        <th>Monofásico</th><th>CST Sugerido</th><th>Inconsistência</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in relatorio.itens %}
+      <tr class="{% if item.inconsistencia %}table-warning{% elif item.monofasico %}table-success{% endif %}">
+        <td class="font-monospace">{{ item.ncm }}</td>
+        <td><small>{{ item.descricao or '—' }}</small></td>
+        <td class="font-monospace">{{ item.cst_atual or '—' }}</td>
+        <td>
+          {% if item.monofasico %}
+            <span class="badge bg-success">Sim</span>
+          {% else %}
+            <span class="badge bg-danger">Não</span>
+          {% endif %}
+        </td>
+        <td class="font-monospace fw-bold">{{ item.cst_sugerido }}</td>
+        <td>
+          {% if item.inconsistencia %}
+            <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
