@@ -66,31 +66,37 @@ def _get_com_retry(url, tentativas=MAX_TENTATIVAS):
 def _detectar_formato(conteudo: bytes, content_type: str) -> str:
     """
     Detecta o formato do arquivo retornado pela RFB.
+    Lê [Content_Types].xml dentro do ZIP para identificação definitiva.
     Retorna: 'docx', 'xlsx', 'html' ou 'desconhecido'.
     """
     ct = content_type.lower()
 
-    # Verificar pela assinatura magic bytes (PK = ZIP = OOXML ou DOCX)
+    # Arquivo ZIP (magic bytes PK) → DOCX ou XLSX
     if conteudo[:2] == b'PK':
-        # É um arquivo ZIP — pode ser DOCX ou XLSX
         try:
             with zipfile.ZipFile(io.BytesIO(conteudo)) as z:
+                # Fonte mais confiável: [Content_Types].xml declara o tipo real
+                if '[Content_Types].xml' in z.namelist():
+                    ct_xml = z.read('[Content_Types].xml').decode('utf-8', errors='ignore')
+                    if 'wordprocessingml' in ct_xml:
+                        return 'docx'
+                    if 'spreadsheetml' in ct_xml:
+                        return 'xlsx'
+                # Fallback por estrutura de pastas
                 nomes = z.namelist()
-                # DOCX tem word/document.xml
+                if any('xl/worksheets' in n or 'xl/workbook' in n for n in nomes):
+                    return 'xlsx'
                 if any('word/document' in n for n in nomes):
                     return 'docx'
-                # XLSX tem xl/workbook
-                if any('xl/workbook' in n or 'xl/worksheets' in n for n in nomes):
-                    return 'xlsx'
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f'Erro ao inspecionar ZIP: {e}')
 
-    # Verificar pelo Content-Type
+    # Content-Type do servidor como segundo critério
     if 'spreadsheet' in ct or 'excel' in ct or 'xlsx' in ct or 'xls' in ct:
         return 'xlsx'
     if 'word' in ct or 'docx' in ct or 'msword' in ct:
         return 'docx'
-    if 'html' in ct or 'text' in ct:
+    if 'html' in ct or 'text/plain' in ct:
         return 'html'
 
     # Tentar pelo conteúdo textual
@@ -262,25 +268,27 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
 
         logger.info(f'Tabela {tabela_id}: formato detectado = {fmt} | Content-Type = {content_type}')
 
-        if fmt == 'docx':
-            pares = _extrair_ncms_docx(conteudo)
-        elif fmt == 'xlsx':
-            pares = _extrair_ncms_xlsx(conteudo)
-        elif fmt == 'html':
-            pares = _extrair_ncms_html(conteudo)
-        else:
-            # Tentar todos em sequência
-            pares = []
-            for fn in [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html]:
-                try:
-                    pares = fn(conteudo)
-                    if pares:
-                        break
-                except Exception:
-                    continue
+        # Ordem de tentativa: formato detectado primeiro, depois os outros
+        ordem = {
+            'xlsx': [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html],
+            'docx': [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_html],
+            'html': [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_docx],
+        }.get(fmt, [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html])
+
+        pares = []
+        ultimo_erro = None
+        for fn in ordem:
+            try:
+                pares = fn(conteudo)
+                if pares:
+                    logger.info(f'Tabela {tabela_id}: extraídos {len(pares)} NCMs via {fn.__name__}')
+                    break
+            except Exception as e:
+                ultimo_erro = e
+                logger.warning(f'Tabela {tabela_id}: {fn.__name__} falhou — {e}')
 
         if not pares:
-            raise Exception(f'Nenhum NCM extraído da tabela {tabela_id} (formato: {fmt})')
+            raise Exception(f'Nenhum NCM extraído da tabela {tabela_id}. Último erro: {ultimo_erro}')
 
         inseridos, atualizados = _salvar_ncms(pares, tabela_id, grupo)
         status = 'sucesso'
