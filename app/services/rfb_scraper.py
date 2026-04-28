@@ -187,6 +187,51 @@ def _extrair_ncms_xls(conteudo: bytes) -> list[tuple[str, str]]:
     return resultado
 
 
+def _extrair_ncms_ole2_doc(conteudo: bytes) -> list[tuple[str, str]]:
+    """
+    Extrai NCMs de arquivo OLE2 Word DOC (binário .doc antigo) via olefile.
+    Lê todos os streams internos e aplica regex sobre texto decodificado.
+    Word 97-2003 armazena texto em UTF-16 LE nos streams internos.
+    """
+    import olefile
+
+    ole = olefile.OleFileIO(io.BytesIO(conteudo))
+    resultado = []
+    vistos = set()
+
+    def _buscar(texto: str):
+        texto = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', ' ', texto)
+        texto = re.sub(r' {4,}', '   ', texto)
+        for m in re.finditer(
+            r'(\d[\d.]{3,})\s{1,10}([A-ZÀ-Üa-zà-ü][^\n\r\x00]{3,150})',
+            texto,
+        ):
+            ncm_raw = m.group(1).replace('.', '').replace('-', '').strip()
+            if re.match(r'^\d{4,10}$', ncm_raw) and ncm_raw not in vistos:
+                desc = m.group(2).strip()[:300]
+                resultado.append((ncm_raw, desc))
+                vistos.add(ncm_raw)
+
+    for entry in ole.listdir():
+        try:
+            data = ole.openstream(entry).read()
+            if len(data) < 20:
+                continue
+            # UTF-16 LE — padrão em Word 97+ (Unicode)
+            _buscar(data.decode('utf-16-le', errors='ignore'))
+            # CP1252 — Word antigo não-Unicode
+            _buscar(data.decode('cp1252', errors='ignore'))
+        except Exception:
+            continue
+
+    # Fallback: varrer bytes brutos do arquivo inteiro
+    if not resultado:
+        _buscar(conteudo.decode('utf-16-le', errors='ignore'))
+        _buscar(conteudo.decode('cp1252', errors='ignore'))
+
+    return resultado
+
+
 def _extrair_ncms_html(conteudo: bytes) -> list[tuple[str, str]]:
     """Extrai pares (ncm, descricao) de HTML com tabelas."""
     from bs4 import BeautifulSoup
@@ -407,14 +452,14 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
         # Ordem de tentativa: formato detectado primeiro, depois os outros.
         # _extrair_ncms_xls cobre arquivos BIFF8/OLE2 (xls antigo).
         # _extrair_ncms_zip_xml é sempre o último fallback (lê ZIP diretamente).
-        _todos = [_extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_docx,
-                  _extrair_ncms_html, _extrair_ncms_zip_xml]
+        _todos = [_extrair_ncms_ole2_doc, _extrair_ncms_xls, _extrair_ncms_xlsx,
+                  _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml]
         ordem = {
-            'xls':       [_extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
-            'doc_antigo':[_extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
-            'xlsx':      [_extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml],
-            'docx':      [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_html, _extrair_ncms_zip_xml],
-            'html':      [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_docx, _extrair_ncms_zip_xml],
+            'xls':       [_extrair_ncms_xls, _extrair_ncms_ole2_doc, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'doc_antigo':[_extrair_ncms_ole2_doc, _extrair_ncms_xls, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'xlsx':      [_extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_docx, _extrair_ncms_ole2_doc, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'docx':      [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_ole2_doc, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'html':      [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_xls, _extrair_ncms_docx, _extrair_ncms_ole2_doc, _extrair_ncms_zip_xml],
         }.get(fmt, _todos)
 
         pares = []
