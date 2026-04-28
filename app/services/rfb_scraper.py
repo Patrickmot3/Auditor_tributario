@@ -166,6 +166,90 @@ def _extrair_ncms_html(conteudo: bytes) -> list[tuple[str, str]]:
     return resultado
 
 
+def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
+    """
+    Fallback: lê XMLs diretamente do ZIP sem depender de python-docx/openpyxl.
+    Funciona para OOXML não-padrão (ex.: tabelas SPED com Content-Types incomum).
+    Estratégia:
+      1. Prioriza xl/sharedStrings.xml (XLSX) e word/document.xml (DOCX).
+      2. Varre todos os .xml do ZIP caso esses não existam.
+      3. Aplica regex para encontrar padrões NCM seguidos de descrição.
+    """
+    from bs4 import BeautifulSoup
+
+    if conteudo[:2] != b'PK':
+        raise Exception('Conteúdo não é um arquivo ZIP')
+
+    resultado = []
+    vistos = set()
+
+    def _extrair_de_xml(xml_bytes: bytes):
+        """Extrai pares NCM+descrição de um bloco XML."""
+        soup = BeautifulSoup(xml_bytes, 'lxml-xml')
+        textos = [t.strip() for t in soup.stripped_strings if t.strip()]
+
+        i = 0
+        while i < len(textos):
+            ncm_raw = textos[i].replace('.', '').replace('-', '').strip()
+            if re.match(r'^\d{4,10}$', ncm_raw) and ncm_raw not in vistos:
+                descricao = textos[i + 1].strip() if i + 1 < len(textos) else ''
+                # Ignora se a "descrição" também parece ser um NCM
+                if re.match(r'^\d{4,10}$', descricao.replace('.', '').replace('-', '')):
+                    descricao = ''
+                resultado.append((ncm_raw, descricao))
+                vistos.add(ncm_raw)
+                i += 2
+                continue
+            i += 1
+
+    # Também tenta varredura linha-a-linha com regex (para texto corrido)
+    def _extrair_de_texto(xml_bytes: bytes):
+        texto = xml_bytes.decode('utf-8', errors='ignore')
+        # Remove tags XML para obter texto limpo
+        texto_limpo = re.sub(r'<[^>]+>', ' ', texto)
+        for match in re.finditer(
+            r'\b(\d[\d.]{3,})\s{1,10}([A-ZÀ-Ü][^\n]{3,120})',
+            texto_limpo,
+        ):
+            ncm_raw = match.group(1).replace('.', '').replace('-', '').strip()
+            if re.match(r'^\d{4,10}$', ncm_raw) and ncm_raw not in vistos:
+                resultado.append((ncm_raw, match.group(2).strip()))
+                vistos.add(ncm_raw)
+
+    PRIORIDADE = [
+        'xl/sharedStrings.xml',
+        'word/document.xml',
+        'xl/worksheets/sheet1.xml',
+    ]
+
+    with zipfile.ZipFile(io.BytesIO(conteudo)) as z:
+        nomes = z.namelist()
+        # Processar arquivos prioritários primeiro
+        for nome in PRIORIDADE:
+            if nome in nomes:
+                try:
+                    xml_bytes = z.read(nome)
+                    _extrair_de_xml(xml_bytes)
+                    _extrair_de_texto(xml_bytes)
+                    logger.debug(f'_extrair_ncms_zip_xml: processado {nome} → {len(resultado)} NCMs até agora')
+                except Exception as e:
+                    logger.debug(f'_extrair_ncms_zip_xml: erro em {nome} — {e}')
+
+        # Se não encontrou nada, varrer todos os XMLs
+        if not resultado:
+            for nome in nomes:
+                if not nome.endswith('.xml') or nome in PRIORIDADE:
+                    continue
+                try:
+                    xml_bytes = z.read(nome)
+                    _extrair_de_xml(xml_bytes)
+                    _extrair_de_texto(xml_bytes)
+                except Exception as e:
+                    logger.debug(f'_extrair_ncms_zip_xml: erro em {nome} — {e}')
+
+    return resultado
+
+
 # ─── Persistência ─────────────────────────────────────────────────────────────
 
 def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[int, int]:
@@ -268,12 +352,13 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
 
         logger.info(f'Tabela {tabela_id}: formato detectado = {fmt} | Content-Type = {content_type}')
 
-        # Ordem de tentativa: formato detectado primeiro, depois os outros
+        # Ordem de tentativa: formato detectado primeiro, depois os outros.
+        # _extrair_ncms_zip_xml é sempre o último fallback (lê o ZIP diretamente).
         ordem = {
-            'xlsx': [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html],
-            'docx': [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_html],
-            'html': [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_docx],
-        }.get(fmt, [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html])
+            'xlsx': [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'docx': [_extrair_ncms_docx, _extrair_ncms_xlsx, _extrair_ncms_html, _extrair_ncms_zip_xml],
+            'html': [_extrair_ncms_html, _extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_zip_xml],
+        }.get(fmt, [_extrair_ncms_xlsx, _extrair_ncms_docx, _extrair_ncms_html, _extrair_ncms_zip_xml])
 
         pares = []
         ultimo_erro = None
