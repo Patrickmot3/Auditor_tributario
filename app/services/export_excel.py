@@ -2,16 +2,52 @@
 Serviço de exportação de consultas para Excel formatado.
 """
 import io
-from datetime import datetime
 import xlsxwriter
 
 
+def _numero_nfe_por_consulta(consultas):
+    """
+    Retorna dict {consulta_id: 'serie-nNF'} buscando o lote mais recente de cada consulta.
+    Evita N+1 queries usando uma única consulta SQL via ORM.
+    """
+    from app.models.consulta import LoteItem, LoteConsulta
+    from app.extensions import db
+    from sqlalchemy import select, func
+
+    if not consultas:
+        return {}
+
+    ids = [c.id for c in consultas]
+
+    # Subconsulta: lote_id mais recente para cada consulta_id
+    sub = (
+        db.session.query(
+            LoteItem.consulta_id,
+            func.max(LoteConsulta.id).label('max_lote_id'),
+        )
+        .join(LoteConsulta, LoteItem.lote_id == LoteConsulta.id)
+        .filter(LoteItem.consulta_id.in_(ids))
+        .filter(LoteConsulta.tipo == 'xml_nfe')
+        .group_by(LoteItem.consulta_id)
+        .subquery()
+    )
+
+    rows = (
+        db.session.query(sub.c.consulta_id, LoteConsulta.nome_lote)
+        .join(LoteConsulta, LoteConsulta.id == sub.c.max_lote_id)
+        .all()
+    )
+
+    return {row.consulta_id: row.nome_lote for row in rows}
+
+
 def gerar_excel_consultas(consultas):
+    numero_nfe_map = _numero_nfe_por_consulta(consultas)
+
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output, {'in_memory': True})
     ws = workbook.add_worksheet('Consultas TribSync')
 
-    # Formatos
     fmt_cabecalho = workbook.add_format({
         'bold': True, 'bg_color': '#1e3a5f', 'font_color': 'white',
         'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True,
@@ -21,15 +57,15 @@ def gerar_excel_consultas(consultas):
     fmt_normal = workbook.add_format({'border': 1})
 
     colunas = [
-        'Empresa', 'CNPJ', 'NCM', 'Descrição do Produto', 'Código Produto',
-        'Cód. CEST', 'Monofásico', 'Grupo Tributário', 'Base Legal',
+        'Empresa', 'CNPJ', 'N° Documento NF-e', 'NCM', 'Descrição do Produto',
+        'Código Produto', 'Cód. CEST', 'Monofásico', 'Grupo Tributário', 'Base Legal',
         'Tabela SPED', 'CST Sugerido Entrada', 'CST Sugerido Saída',
         'CFOP Sugerido', 'Alíquota PIS (%)', 'Alíquota COFINS (%)',
         'Posição na Cadeia', 'Inconsistência Detectada', 'Observação',
         'Data da Consulta',
     ]
 
-    larguras = [30, 20, 12, 40, 15, 12, 12, 25, 40, 12, 20, 20, 15, 15, 18, 18, 22, 50, 20]
+    larguras = [30, 20, 18, 12, 40, 15, 12, 12, 25, 40, 12, 20, 20, 15, 15, 18, 18, 22, 50, 20]
 
     for col_idx, (col, larg) in enumerate(zip(colunas, larguras)):
         ws.write(0, col_idx, col, fmt_cabecalho)
@@ -42,6 +78,7 @@ def gerar_excel_consultas(consultas):
         empresa = c.empresa
         monofasico_str = 'Sim' if c.monofasico else 'Não'
         inconsistencia_str = 'Sim' if c.inconsistencia_detectada else 'Não'
+        numero_nfe = numero_nfe_map.get(c.id, '')
 
         if c.inconsistencia_detectada:
             fmt = fmt_inconsistencia
@@ -53,6 +90,7 @@ def gerar_excel_consultas(consultas):
         linha = [
             empresa.razao_social if empresa else '',
             empresa.cnpj_formatado if empresa else '',
+            numero_nfe,
             c.ncm_consultado or '',
             c.descricao_produto or '',
             c.codigo_produto or '',

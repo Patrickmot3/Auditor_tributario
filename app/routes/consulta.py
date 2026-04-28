@@ -165,6 +165,8 @@ def lote_xml():
                 notas.append({
                     'arquivo': arq.filename,
                     'ch_nfe': res.get('ch_nfe', ''),
+                    'n_nf': res.get('n_nf', ''),
+                    'serie': res.get('serie', ''),
                     'razao_emitente': res.get('razao_emitente', ''),
                     'cnpj_emitente': res.get('cnpj_emitente', ''),
                     'data_emissao': res.get('data_emissao', ''),

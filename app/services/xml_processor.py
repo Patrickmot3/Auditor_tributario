@@ -53,12 +53,16 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
     data_emissao = _tag(ide, 'dhEmi') or _tag(ide, 'dEmi') if ide is not None else ''
     cnpj_emit = _tag(emit, 'CNPJ') if emit is not None else ''
     razao_emit = _tag(emit, 'xNome') if emit is not None else ''
+    n_nf = _tag(ide, 'nNF') if ide is not None else ''
+    serie = _tag(ide, 'serie') if ide is not None else ''
 
     dets = inf_nfe.findall('nfe:det', NS) or inf_nfe.findall('det')
 
+    numero_lote = (f'NF-e {serie.zfill(3)}-{n_nf.zfill(9)}' if n_nf
+                   else (f'NF-e {ch_nfe[:10]}...' if ch_nfe else 'XML NF-e'))
     lote = LoteConsulta(
         empresa_id=empresa_id,
-        nome_lote=f'NF-e {ch_nfe[:10]}...' if ch_nfe else 'XML NF-e',
+        nome_lote=numero_lote,
         tipo='xml_nfe',
         status='processando',
     )
@@ -181,6 +185,8 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
     return {
         'lote_id': lote.id,
         'ch_nfe': ch_nfe,
+        'n_nf': n_nf,
+        'serie': serie,
         'cnpj_emitente': cnpj_emit,
         'razao_emitente': razao_emit,
         'data_emissao': data_emissao,
@@ -349,6 +355,8 @@ def processar_lote_compactado(caminho: str, empresa_id: int, nome_arquivo: str) 
         notas.append({
             'arquivo': nome_xml,
             'ch_nfe': resultado.get('ch_nfe', ''),
+            'n_nf': resultado.get('n_nf', ''),
+            'serie': resultado.get('serie', ''),
             'razao_emitente': resultado.get('razao_emitente', ''),
             'cnpj_emitente': resultado.get('cnpj_emitente', ''),
             'data_emissao': resultado.get('data_emissao', ''),

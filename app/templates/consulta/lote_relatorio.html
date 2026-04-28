@@ -26,10 +26,18 @@
 <div class="card mb-3">
   <div class="card-body">
     <div class="row g-2">
+      <div class="col-md-2">
+        <small class="text-muted">N° Documento</small><br>
+        <strong class="font-monospace">
+          {% if relatorio.n_nf %}
+            {{ relatorio.serie }}-{{ relatorio.n_nf | int }}
+          {% else %}—{% endif %}
+        </strong>
+      </div>
       <div class="col-md-3"><small class="text-muted">Chave NF-e</small><br><span class="font-monospace small">{{ relatorio.ch_nfe[:22] }}...</span></div>
-      <div class="col-md-4"><small class="text-muted">Emitente</small><br><strong>{{ relatorio.razao_emitente }}</strong></div>
+      <div class="col-md-3"><small class="text-muted">Emitente</small><br><strong>{{ relatorio.razao_emitente }}</strong></div>
       <div class="col-md-2"><small class="text-muted">CNPJ Emitente</small><br>{{ relatorio.cnpj_emitente }}</div>
-      <div class="col-md-3"><small class="text-muted">Data Emissão</small><br>{{ relatorio.data_emissao[:10] if relatorio.data_emissao else '—' }}</div>
+      <div class="col-md-2"><small class="text-muted">Data Emissão</small><br>{{ relatorio.data_emissao[:10] if relatorio.data_emissao else '—' }}</div>
     </div>
   </div>
 </div>
@@ -46,6 +54,7 @@
       <table class="table table-sm mb-0">
         <thead class="table-dark">
           <tr>
+            <th>N° Documento</th>
             <th>Arquivo</th>
             <th>Emitente</th>
             <th>Data</th>
@@ -58,6 +67,9 @@
         <tbody>
           {% for nota in relatorio.notas %}
           <tr {% if nota.erro %}class="table-danger"{% elif nota.inconsistencias %}class="table-warning"{% endif %}>
+            <td class="font-monospace fw-bold">
+              {% if nota.n_nf %}{{ nota.serie }}-{{ nota.n_nf | int }}{% else %}—{% endif %}
+            </td>
             <td class="font-monospace small">{{ nota.arquivo }}</td>
             <td><small>{{ nota.razao_emitente or '—' }}</small></td>
             <td><small>{{ nota.data_emissao[:10] if nota.data_emissao else '—' }}</small></td>
