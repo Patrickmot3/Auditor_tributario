@@ -128,7 +128,10 @@
           {% else %}—{% endif %}
         </td>
         <td class="col-grupo"><small>{{ c.grupo_tributario or '—' }}</small></td>
-        <td class="font-monospace col-cst">{{ c.cst_sugerido or '—' }}</td>
+        <td class="font-monospace col-cst" title="{{ cst_descricao.get(c.cst_sugerido, '') }}">
+          {{ c.cst_sugerido or '—' }}
+          {% if c.cst_sugerido %}<br><small class="text-muted fw-normal" style="font-size:.65rem;">{{ cst_descricao.get(c.cst_sugerido, '')|truncate(30, True, '…') }}</small>{% endif %}
+        </td>
         <td class="col-pis">{{ "%.4f"|format(c.pis_aliquota|float) if c.pis_aliquota is not none else '—' }}</td>
         <td class="col-cofins">{{ "%.4f"|format(c.cofins_aliquota|float) if c.cofins_aliquota is not none else '—' }}</td>
         <td class="col-inconsistencia">

@@ -13,6 +13,26 @@ from app.models.base_tributaria import LogAtualizacao
 
 logger = logging.getLogger(__name__)
 
+# Mapeamento CST → descrição do regime de tributação PIS/COFINS
+CST_DESCRICAO = {
+    '01': 'Tributável — Alíquota Básica (regime geral)',
+    '02': 'Monofásico — Fabricante/Importador com Alíquota Diferenciada',
+    '03': 'Monofásico — Cobrança por Unidade de Medida (fabricante/importador)',
+    '04': 'Monofásico — Revenda a Alíquota Zero (varejista/atacadista)',
+    '05': 'Substituição Tributária — PIS/COFINS retido pelo substituto',
+    '06': 'Alíquota Zero — Produto com tributação reduzida a 0% por lei',
+    '07': 'Isento — Operação isenta de PIS/COFINS por lei',
+    '08': 'Sem Incidência — Operação não sujeita à contribuição',
+    '09': 'Suspensão — Cobrança de PIS/COFINS suspensa por lei',
+    '49': 'Outras Operações de Saída',
+    '50': 'Entrada — Aquisição vinculada a receita tributada (direito a crédito)',
+    '70': 'Entrada Monofásico — Aquisição a Alíquota Zero',
+    '73': 'Entrada — Aquisição a Alíquota Zero (importação)',
+    '75': 'Entrada — Aquisição sem Incidência da Contribuição',
+    '98': 'Outras Operações de Entrada',
+    '99': 'Outras Operações',
+}
+
 # CNAEs automotivos (Lei 10.485/2002 — regra de destinação)
 CNAES_AUTOMOTIVOS = {
     '4511', '4512', '4520', '4541', '4542',
@@ -131,6 +151,7 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
             'ultima_atualizacao_tabela': ultima_atualizacao_str,
             'versao_tabela': versao_tabela,
             'encontrado': False,
+            'descricao_tributacao': 'NCM não localizado — verificar tributação manualmente',
         }
         _gravar_consulta(ncm_limpo, empresa, resultado, cst_atual)
         return resultado
@@ -191,6 +212,7 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
         'encontrado': True,
         'tipo_referencia': registro.tipo_referencia,
         'descricao_ncm': registro.descricao,
+        'descricao_tributacao': CST_DESCRICAO.get(cst_sugerido, f'CST {cst_sugerido}'),
     }
 
     _gravar_consulta(ncm_limpo, empresa, resultado, cst_atual)

@@ -121,6 +121,7 @@
                       <th>CST Atual</th>
                       <th>Monofásico</th>
                       <th>CST Sugerido</th>
+                      <th>Regime PIS/COFINS</th>
                       <th>Inconsistência</th>
                     </tr>
                   </thead>
@@ -138,6 +139,7 @@
                         {% endif %}
                       </td>
                       <td class="font-monospace fw-bold small">{{ item.cst_sugerido or '—' }}</td>
+                      <td><small class="text-muted">{{ cst_descricao.get(item.cst_sugerido, '—') }}</small></td>
                       <td>
                         {% if item.inconsistencia %}
                           <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
@@ -200,6 +202,7 @@
         <th>CST Atual</th>
         <th>Monofásico</th>
         <th>CST Sugerido</th>
+        <th>Regime PIS/COFINS</th>
         <th>Inconsistência</th>
         {% if tipo == 'excel' %}<th>Status</th>{% endif %}
       </tr>
@@ -220,6 +223,7 @@
           {% endif %}
         </td>
         <td class="font-monospace fw-bold">{{ item.cst_sugerido or '—' }}</td>
+        <td><small class="text-muted">{{ cst_descricao.get(item.cst_sugerido, '—') }}</small></td>
         <td>
           {% if item.inconsistencia %}
             <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>

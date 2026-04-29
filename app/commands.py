@@ -51,6 +51,30 @@ GRUPOS = [
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'descricao': 'Pneus e câmaras de ar.',
     },
+    {
+        'codigo': 'G600',
+        'nome': 'Substituição Tributária PIS/COFINS',
+        'lei_base': 'Lei nº 9.532/1997 e Lei nº 12.715/2012',
+        'tabela_sped': '4.3.12',
+        'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
+        'descricao': 'Produtos sujeitos a PIS/COFINS por Substituição Tributária (CST 05).',
+    },
+    {
+        'codigo': 'G700',
+        'nome': 'Alimentos Básicos e Livros — Isenção PIS/COFINS',
+        'lei_base': 'Lei nº 10.925/2004, Art. 150 CF/88',
+        'tabela_sped': '4.3.14',
+        'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
+        'descricao': 'Alimentos básicos, livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
+    },
+    {
+        'codigo': 'G800',
+        'nome': 'Insumos Agropecuários — Suspensão PIS/COFINS',
+        'lei_base': 'Lei nº 10.865/2004 e Decreto nº 5.630/2005',
+        'tabela_sped': '4.3.16',
+        'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
+        'descricao': 'Insumos agropecuários com recolhimento de PIS/COFINS suspenso (CST 09).',
+    },
 ]
 
 # NCMs Lei 10.485/2002 (Anexo I) — posições de 4 dígitos
@@ -76,10 +100,48 @@ BEBIDAS_PREFIXOS = ['2201', '2202', '2203', '2204', '2205', '2206', '2207', '220
 
 PNEUMATICOS_POSICOES = ['4011', '4013']
 
+# ── Tabela 4.3.12 — Substituição Tributária PIS/COFINS (CST 05) ──────────────
+TABACO_ST = [
+    ('2402', 'Charutos, cigarrilhas e cigarros de tabaco ou seus sucedâneos'),
+    ('2403', 'Outros produtos de tabaco e sucedâneos manufaturados'),
+]
+
+# ── Tabela 4.3.14 — Isenção PIS/COFINS (CST 07) ──────────────────────────────
+ALIMENTOS_ISENTOS_PREFIXOS = [
+    ('01', 'Animais vivos'),
+    ('02', 'Carnes e miudezas comestíveis'),
+    ('03', 'Peixes, crustáceos e outros invertebrados aquáticos'),
+    ('04', 'Leite, laticínios, ovos de aves e mel natural'),
+    ('07', 'Produtos hortícolas, plantas, raízes e tubérculos comestíveis'),
+    ('08', 'Frutas, cascas de cítricos e de melões'),
+    ('10', 'Cereais'),
+    ('11', 'Produtos da indústria de moagem; malte; amidos e féculas'),
+]
+
+LIVROS_ISENTOS = [
+    ('4901', 'Livros, brochuras e impressos semelhantes'),
+    ('4902', 'Jornais, revistas e outras publicações periódicas'),
+    ('4903', 'Álbuns ou livros de ilustrações para crianças'),
+    ('4904', 'Músicas manuscritas ou impressas'),
+    ('4905', 'Obras cartográficas de qualquer espécie'),
+]
+
+# ── Tabela 4.3.16 — Suspensão PIS/COFINS (CST 09) ────────────────────────────
+INSUMOS_SUSPENSAO = [
+    ('1209', 'Sementes, frutos e esporos para semeadura'),
+    ('3101', 'Adubos de origem animal ou vegetal'),
+    ('3102', 'Adubos minerais ou químicos nitrogenados'),
+    ('3103', 'Adubos minerais ou químicos fosfatados'),
+    ('3104', 'Adubos minerais ou químicos potássicos'),
+    ('3105', 'Outros adubos e fertilizantes minerais ou químicos'),
+    ('3808', 'Inseticidas, rodenticidas, fungicidas, herbicidas e similares'),
+]
+
 
 def _criar_ncm(ncm, descricao, grupo_id, tipo_ref, lei,
                pis_fab=1.5, cofins_fab=7.0, pis_var=0.0, cofins_var=0.0,
-               cst_entrada='70', cst_saida='04'):
+               cst_entrada='70', cst_saida='04', monofasico=True,
+               vigencia=None, fonte=None):
     existente = NcmTributario.query.filter_by(
         ncm=ncm, grupo_tributario_id=grupo_id
     ).first()
@@ -90,7 +152,7 @@ def _criar_ncm(ncm, descricao, grupo_id, tipo_ref, lei,
         ncm=ncm,
         descricao=descricao,
         grupo_tributario_id=grupo_id,
-        monofasico=True,
+        monofasico=monofasico,
         tipo_referencia=tipo_ref,
         lei=lei,
         cst_entrada=cst_entrada,
@@ -101,8 +163,8 @@ def _criar_ncm(ncm, descricao, grupo_id, tipo_ref, lei,
         cofins_aliquota_fabricante=cofins_fab,
         pis_aliquota_varejista=pis_var,
         cofins_aliquota_varejista=cofins_var,
-        vigencia_inicio=date(2002, 1, 1),
-        fonte_url='https://www.planalto.gov.br/ccivil_03/leis/2002/L10485compilado.htm',
+        vigencia_inicio=vigencia or date(2002, 1, 1),
+        fonte_url=fonte or 'https://www.planalto.gov.br/ccivil_03/leis/2002/L10485compilado.htm',
         ativo=True,
     )
     db.session.add(n)
@@ -192,6 +254,68 @@ def register_commands(app):
         db.session.commit()
         click.echo(f'  Pneumáticos: {len(PNEUMATICOS_POSICOES)} posições processadas')
 
+        # --- G600 — Substituição Tributária PIS/COFINS (CST 05 / Tabela 4.3.12) ---
+        g_st = grupos_map.get('G600')
+        if g_st:
+            for pos, desc in TABACO_ST:
+                ok = _criar_ncm(
+                    pos, desc, g_st, 'posicao_4',
+                    'Lei nº 9.532/1997 e Lei nº 12.715/2012',
+                    0.0, 0.0, 0.0, 0.0,
+                    cst_entrada='05', cst_saida='05', monofasico=False,
+                    vigencia=date(1997, 12, 10),
+                    fonte='https://www.planalto.gov.br/ccivil_03/leis/L9532.htm',
+                )
+                if ok:
+                    inseridos += 1
+            db.session.commit()
+            click.echo(f'  ST (CST 05): {len(TABACO_ST)} posições processadas')
+
+        # --- G700 — Isenção PIS/COFINS (CST 07 / Tabela 4.3.14) ---
+        g_isen = grupos_map.get('G700')
+        if g_isen:
+            lei_isen = 'Lei nº 10.925/2004'
+            fonte_isen = 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2004/lei/l10.925.htm'
+            for pref, desc in ALIMENTOS_ISENTOS_PREFIXOS:
+                ok = _criar_ncm(
+                    pref, desc, g_isen, 'prefixo', lei_isen,
+                    0.0, 0.0, 0.0, 0.0,
+                    cst_entrada='07', cst_saida='07', monofasico=False,
+                    vigencia=date(2004, 7, 23), fonte=fonte_isen,
+                )
+                if ok:
+                    inseridos += 1
+            for pos, desc in LIVROS_ISENTOS:
+                ok = _criar_ncm(
+                    pos, desc, g_isen, 'posicao_4',
+                    'Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
+                    0.0, 0.0, 0.0, 0.0,
+                    cst_entrada='07', cst_saida='07', monofasico=False,
+                    vigencia=date(2004, 1, 1),
+                    fonte='https://www.planalto.gov.br/ccivil_03/leis/2003/l10.833.htm',
+                )
+                if ok:
+                    inseridos += 1
+            db.session.commit()
+            click.echo(f'  Isenção (CST 07): {len(ALIMENTOS_ISENTOS_PREFIXOS) + len(LIVROS_ISENTOS)} entradas processadas')
+
+        # --- G800 — Suspensão PIS/COFINS (CST 09 / Tabela 4.3.16) ---
+        g_susp = grupos_map.get('G800')
+        if g_susp:
+            for pos, desc in INSUMOS_SUSPENSAO:
+                ok = _criar_ncm(
+                    pos, desc, g_susp, 'posicao_4',
+                    'Lei nº 10.865/2004 e Decreto nº 5.630/2005',
+                    0.0, 0.0, 0.0, 0.0,
+                    cst_entrada='09', cst_saida='09', monofasico=False,
+                    vigencia=date(2004, 5, 30),
+                    fonte='https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2004/lei/l10.865.htm',
+                )
+                if ok:
+                    inseridos += 1
+            db.session.commit()
+            click.echo(f'  Suspensão (CST 09): {len(INSUMOS_SUSPENSAO)} posições processadas')
+
         # --- Alíquotas iniciais por grupo (legislação vigente) ---
         ALIQUOTAS_SEED = [
             # (codigo_grupo, pis_fab, cofins_fab, pis_var, cofins_var, vigencia_inicio, lei)
@@ -200,6 +324,9 @@ def register_commands(app):
             ('G300', 2.10,  9.90,  0.0, 0.0, date(2000,  1,  1), 'Lei nº 10.147/2000'),
             ('G400', 1.86,  8.54,  0.0, 0.0, date(2015,  1,  1), 'Lei nº 13.097/2015'),
             ('G500', 2.00,  9.50,  0.0, 0.0, date(2002,  1,  1), 'Lei nº 10.485/2002 — Art. 5º'),
+            ('G600', 0.00,  0.00,  0.0, 0.0, date(1997, 12, 10), 'Lei nº 9.532/1997 (ST — CST 05)'),
+            ('G700', 0.00,  0.00,  0.0, 0.0, date(2004,  7, 23), 'Lei nº 10.925/2004 (Isenção — CST 07)'),
+            ('G800', 0.00,  0.00,  0.0, 0.0, date(2004,  5, 30), 'Lei nº 10.865/2004 (Suspensão — CST 09)'),
         ]
         for cod, pis_f, cof_f, pis_v, cof_v, vig, lei in ALIQUOTAS_SEED:
             gid = grupos_map.get(cod)
@@ -249,7 +376,7 @@ def register_commands(app):
             status='seed_inicial',
             registros_inseridos=inseridos,
             registros_atualizados=0,
-            mensagem='Seed inicial com dados da Lei 10.485/2002, 9.718/98, 10.147/2000 e 13.097/2015',
+            mensagem='Seed com dados das tabelas SPED 4.3.10–4.3.16 (Leis 10.485/2002, 9.718/98, 10.147/2000, 13.097/2015, 10.925/2004, 10.865/2004)',
             executado_por='flask seed-db',
         )
         db.session.add(log)

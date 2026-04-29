@@ -54,6 +54,7 @@
         <th>Monofásico</th>
         <th>Grupo</th>
         <th>CST Sugerido</th>
+        <th>Regime PIS/COFINS</th>
         <th>CFOP</th>
         <th>Alíq. PIS</th>
         <th>Alíq. COFINS</th>
@@ -74,6 +75,7 @@
         </td>
         <td><small>{{ r.grupo or '—' }}</small></td>
         <td class="font-monospace fw-bold">{{ r.cst_sugerido }}</td>
+        <td><small class="text-muted">{{ cst_descricao.get(r.cst_sugerido, '—') }}</small></td>
         <td class="font-monospace">{{ r.cfop_sugerido or '—' }}</td>
         <td>{{ "%.4f"|format(r.pis_aliquota) }}%</td>
         <td>{{ "%.4f"|format(r.cofins_aliquota) }}%</td>

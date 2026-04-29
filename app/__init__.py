@@ -72,7 +72,8 @@ def create_app(config_name=None):
 
     @app.context_processor
     def inject_globals():
-        return {'today': _date.today()}
+        from app.services.ncm_validator import CST_DESCRICAO
+        return {'today': _date.today(), 'cst_descricao': CST_DESCRICAO}
 
     @app.template_filter('brt')
     def to_brt(dt, fmt='%d/%m/%Y %H:%M'):

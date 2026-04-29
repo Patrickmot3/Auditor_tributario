@@ -42,6 +42,7 @@
           <dt class="col-5">Posição Cadeia</dt><dd class="col-7">{{ consulta.posicao_cadeia | title if consulta.posicao_cadeia else '—' }}</dd>
           <dt class="col-5">CST Atual</dt><dd class="col-7 font-monospace">{{ consulta.cst_atual or '—' }}</dd>
           <dt class="col-5">CST Sugerido</dt><dd class="col-7 font-monospace fw-bold">{{ consulta.cst_sugerido or '—' }}</dd>
+          <dt class="col-5">Regime PIS/COFINS</dt><dd class="col-7 small">{{ cst_descricao.get(consulta.cst_sugerido, '—') }}</dd>
           <dt class="col-5">CFOP Sugerido</dt><dd class="col-7 font-monospace">{{ consulta.cfop_sugerido or '—' }}</dd>
           <dt class="col-5">Alíquota PIS</dt><dd class="col-7">{{ "%.4f"|format(consulta.pis_aliquota|float) if consulta.pis_aliquota is not none else '—' }}%</dd>
           <dt class="col-5">Alíquota COFINS</dt><dd class="col-7">{{ "%.4f"|format(consulta.cofins_aliquota|float) if consulta.cofins_aliquota is not none else '—' }}%</dd>
