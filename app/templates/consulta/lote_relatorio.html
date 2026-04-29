@@ -13,9 +13,9 @@
     {% endif %}
   </h5>
   <div class="d-flex gap-2">
-    {% if tipo == 'xml' and relatorio.lote_id %}
+    {% if relatorio.lote_id and tipo in ('xml', 'excel') %}
       <a href="{{ url_for('consulta.exportar', lote_id=relatorio.lote_id) }}" class="btn btn-sm btn-success">
-        <i class="bi bi-file-earmark-excel"></i> Exportar esta NF-e
+        <i class="bi bi-file-earmark-excel"></i> Exportar esta consulta
       </a>
     {% elif tipo == 'xml_lote' and relatorio.lote_ids %}
       <a href="{{ url_for('consulta.exportar', lote_ids=relatorio.lote_ids|join(',')) }}" class="btn btn-sm btn-success">
@@ -183,34 +183,59 @@
 </div>
 
 {% if relatorio.get('itens') %}
-<h6 class="mb-2"><i class="bi bi-list-ul"></i> Produtos desta NF-e</h6>
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h6 class="mb-0">
+    <i class="bi bi-list-ul"></i>
+    {% if tipo == 'excel' %}Produtos importados{% else %}Produtos desta NF-e{% endif %}
+    <span class="badge bg-secondary ms-1">{{ relatorio.itens|length }}</span>
+  </h6>
+</div>
 <div class="table-responsive">
   <table class="table table-sm table-hover">
     <thead class="table-dark">
       <tr>
-        <th>NCM</th><th>Produto</th><th>CST Atual</th>
-        <th>Monofásico</th><th>CST Sugerido</th><th>Inconsistência</th>
+        <th>NCM</th>
+        {% if tipo == 'excel' %}<th>Código</th>{% endif %}
+        <th>Produto</th>
+        <th>CST Atual</th>
+        <th>Monofásico</th>
+        <th>CST Sugerido</th>
+        <th>Inconsistência</th>
+        {% if tipo == 'excel' %}<th>Status</th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for item in relatorio.itens %}
-      <tr class="{% if item.inconsistencia %}table-warning{% elif item.monofasico %}table-success{% endif %}">
+      <tr class="{% if item.inconsistencia %}table-warning{% elif item.monofasico %}table-success{% elif item.status == 'erro' %}table-danger{% endif %}">
         <td class="font-monospace">{{ item.ncm }}</td>
+        {% if tipo == 'excel' %}
+          <td class="font-monospace small">{{ item.codigo or '—' }}</td>
+        {% endif %}
         <td><small>{{ item.descricao or '—' }}</small></td>
         <td class="font-monospace">{{ item.cst_atual or '—' }}</td>
         <td>
-          {% if item.monofasico %}
-            <span class="badge bg-success">Sim</span>
-          {% else %}
-            <span class="badge bg-danger">Não</span>
+          {% if item.monofasico is none %}—
+          {% elif item.monofasico %}<span class="badge bg-success">Sim</span>
+          {% else %}<span class="badge bg-danger">Não</span>
           {% endif %}
         </td>
-        <td class="font-monospace fw-bold">{{ item.cst_sugerido }}</td>
+        <td class="font-monospace fw-bold">{{ item.cst_sugerido or '—' }}</td>
         <td>
           {% if item.inconsistencia %}
             <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
           {% else %}—{% endif %}
         </td>
+        {% if tipo == 'excel' %}
+          <td>
+            {% if item.status == 'duplicado' %}
+              <span class="badge bg-info text-dark">Atualizado</span>
+            {% elif item.status == 'erro' %}
+              <span class="badge bg-danger">Erro</span>
+            {% else %}
+              <span class="badge bg-success">Novo</span>
+            {% endif %}
+          </td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>

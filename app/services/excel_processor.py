@@ -105,6 +105,7 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
     monofasicos = 0
     nao_monofasicos = 0
     inconsistencias = 0
+    itens_resultado = []
 
     for idx, row in df.iterrows():
         ncm_raw = str(row.get(col_ncm, '') or '').strip()
@@ -179,6 +180,18 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
             if resultado.get('inconsistencia_detectada'):
                 inconsistencias += 1
 
+            itens_resultado.append({
+                'ncm':           ncm_limpo,
+                'descricao':     descricao,
+                'codigo':        codigo,
+                'cst_atual':     cst_atual,
+                'monofasico':    resultado.get('monofasico'),
+                'cst_sugerido':  resultado.get('cst_sugerido'),
+                'inconsistencia': resultado.get('inconsistencia_detectada'),
+                'grupo':         resultado.get('grupo'),
+                'status':        status_item,
+            })
+
         except Exception as e:
             logger.error(f'Erro ao processar NCM {ncm_limpo} (linha {linha_num}): {e}')
             item = LoteItem(
@@ -192,6 +205,11 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
             )
             db.session.add(item)
             erros += 1
+            itens_resultado.append({
+                'ncm': ncm_limpo, 'descricao': descricao, 'codigo': codigo,
+                'cst_atual': cst_atual, 'monofasico': None, 'cst_sugerido': None,
+                'inconsistencia': False, 'grupo': None, 'status': 'erro',
+            })
             db.session.rollback()
 
     # Atualizar resumo do lote
@@ -212,4 +230,5 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
         'monofasicos': monofasicos,
         'nao_monofasicos': nao_monofasicos,
         'inconsistencias': inconsistencias,
+        'itens': itens_resultado,
     }
