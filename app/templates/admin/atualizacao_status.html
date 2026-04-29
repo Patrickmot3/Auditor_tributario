@@ -2,16 +2,18 @@
 {% block title %}Status Tabelas SPED{% endblock %}
 
 {% block content %}
-<h5 class="mb-4"><i class="bi bi-arrow-repeat"></i> Status das Tabelas SPED</h5>
+<h5 class="mb-4"><i class="bi bi-arrow-repeat"></i> Status das Tabelas SPED — EFD-Contribuições</h5>
 
 <div class="row g-3 mb-4">
   {% for t in status_tabelas %}
   <div class="col-md-6">
-    <div class="card {% if t.status == 'sucesso' or t.status == 'seed_inicial' %}border-success{% elif t.status == 'erro' %}border-danger{% else %}border-secondary{% endif %}">
-      <div class="card-header d-flex justify-content-between">
-        <span><i class="bi bi-table"></i> Tabela {{ t.tabela }}</span>
-        {% if t.status == 'sucesso' or t.status == 'seed_inicial' %}
-          <span class="badge bg-success">Atualizado</span>
+    <div class="card {% if t.status in ('sucesso', 'seed_inicial') %}border-success{% elif t.status == 'erro' %}border-danger{% else %}border-secondary{% endif %}">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> <strong>Tabela {{ t.tabela }}</strong>
+          {% if t.descricao %}<small class="text-muted ms-1">— {{ t.descricao }}</small>{% endif %}
+        </span>
+        {% if t.status in ('sucesso', 'seed_inicial') %}
+          <span class="badge bg-success">Ativo</span>
         {% elif t.status == 'erro' %}
           <span class="badge bg-danger">Erro</span>
         {% elif t.status == 'sem_alteracoes' %}
@@ -21,10 +23,18 @@
         {% endif %}
       </div>
       <div class="card-body">
-        <dl class="row mb-2">
-          <dt class="col-6">Versão no sistema</dt><dd class="col-6">{{ t.versao }}</dd>
-          <dt class="col-6">Data atualização RFB</dt><dd class="col-6">{{ t.data_rfb }}</dd>
-          <dt class="col-6">Última importação</dt><dd class="col-6">{{ t.data_importacao }}</dd>
+        {% if t.grupos %}
+        <p class="small text-muted mb-2"><i class="bi bi-diagram-3"></i> {{ t.grupos }}</p>
+        {% endif %}
+        <dl class="row mb-2 small">
+          <dt class="col-6">NCMs no sistema</dt>
+          <dd class="col-6 fw-bold">{{ t.ncm_count }}</dd>
+          <dt class="col-6">Versão no sistema</dt>
+          <dd class="col-6">{{ t.versao }}</dd>
+          <dt class="col-6">Data atualização RFB</dt>
+          <dd class="col-6">{{ t.data_rfb }}</dd>
+          <dt class="col-6">Última importação</dt>
+          <dd class="col-6">{{ t.data_importacao }}</dd>
         </dl>
         <form method="POST" action="{{ url_for('admin.atualizacao_executar') }}" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -51,20 +51,62 @@ def dashboard():
 @admin_bp.route('/atualizacao/status')
 @login_required
 def atualizacao_status():
-    tabelas = ['4.3.10', '4.3.13', '4.3.15']
-    status_tabelas = []
+    from app.models.ncm import GrupoTributario, NcmTributario
+    from sqlalchemy import func
 
-    for tabela in tabelas:
+    DESCRICAO_TABELA = {
+        '4.3.10': 'Monofásicos — Alíquotas Diferenciadas (CST 02/04)',
+        '4.3.11': 'Monofásicos por Unidade de Medida (CST 03/04)',
+        '4.3.12': 'Substituição Tributária (CST 05)',
+        '4.3.13': 'Alíquota Zero (CST 06)',
+        '4.3.14': 'Isenção PIS/COFINS (CST 07)',
+        '4.3.15': 'Sem Incidência (CST 08)',
+        '4.3.16': 'Suspensão PIS/COFINS (CST 09)',
+    }
+
+    # Agrupa grupos por tabela_sped
+    grupos = GrupoTributario.query.order_by(GrupoTributario.tabela_sped, GrupoTributario.codigo).all()
+    tabelas_map = {}
+    for g in grupos:
+        ts = g.tabela_sped or 'N/A'
+        tabelas_map.setdefault(ts, {'grupos': []})['grupos'].append(g)
+
+    # Contagem de NCMs ativos por tabela
+    ncm_counts = (
+        db.session.query(GrupoTributario.tabela_sped, func.count(NcmTributario.id))
+        .join(NcmTributario, NcmTributario.grupo_tributario_id == GrupoTributario.id)
+        .filter(NcmTributario.ativo == True)
+        .group_by(GrupoTributario.tabela_sped)
+        .all()
+    )
+    ncm_por_tabela = {ts: cnt for ts, cnt in ncm_counts}
+
+    # Log de seed como fallback para tabelas sem log próprio
+    seed_log = LogAtualizacao.query.filter(
+        LogAtualizacao.tabela_sped == 'seed'
+    ).order_by(LogAtualizacao.data_importacao.desc()).first()
+
+    status_tabelas = []
+    for ts in sorted(tabelas_map.keys()):
+        grupos_ts = tabelas_map[ts]['grupos']
         log = LogAtualizacao.query.filter(
-            LogAtualizacao.tabela_sped == tabela,
+            LogAtualizacao.tabela_sped == ts,
         ).order_by(LogAtualizacao.data_importacao.desc()).first()
 
+        tem_log_proprio = log is not None
+        if not log:
+            log = seed_log
+
+        grupos_str = ' / '.join(f"{g.codigo} — {g.nome}" for g in grupos_ts)
         status_tabelas.append({
-            'tabela': tabela,
+            'tabela': ts,
+            'descricao': DESCRICAO_TABELA.get(ts, ''),
+            'grupos': grupos_str,
+            'ncm_count': ncm_por_tabela.get(ts, 0),
             'versao': log.versao if log else 'N/A',
             'data_rfb': log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log and log.data_atualizacao_rfb else 'N/A',
             'data_importacao': _fmt_brt(log.data_importacao) if log else 'N/A',
-            'status': log.status if log else 'sem_dados',
+            'status': (log.status if tem_log_proprio else 'seed_inicial') if log else 'sem_dados',
         })
 
     from app.services.scheduler import get_proximas_execucoes
