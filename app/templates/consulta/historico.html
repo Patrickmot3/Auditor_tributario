@@ -4,13 +4,52 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h5><i class="bi bi-clock-history"></i> Histórico de Consultas</h5>
-  <a href="{{ url_for('consulta.exportar', empresa_id=empresa_id or '', monofasico=monofasico or '', inconsistencia=inconsistencia or '') }}"
-     class="btn btn-sm btn-success">
-    <i class="bi bi-file-earmark-excel"></i> Exportar
-  </a>
+  <div class="d-flex gap-2 align-items-center">
+    <!-- Seletor de colunas -->
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+              id="colSelector" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+        <i class="bi bi-layout-three-columns"></i> Colunas
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:180px">
+        {% set col_labels = [
+          ('col-ncm',           'NCM'),
+          ('col-empresa',       'Empresa'),
+          ('col-produto',       'Produto'),
+          ('col-monofasico',    'Monofásico'),
+          ('col-grupo',         'Grupo'),
+          ('col-cst',           'CST'),
+          ('col-pis',           'PIS%'),
+          ('col-cofins',        'COFINS%'),
+          ('col-inconsistencia','Inconsistência'),
+          ('col-data',          'Data'),
+        ] %}
+        {% for col_id, col_label in col_labels %}
+        <li>
+          <label class="dropdown-item d-flex gap-2 align-items-center py-1" style="cursor:pointer">
+            <input type="checkbox" class="form-check-input col-toggle m-0"
+                   data-col="{{ col_id }}" checked>
+            {{ col_label }}
+          </label>
+        </li>
+        {% endfor %}
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <button class="btn btn-sm btn-link w-100 text-start ps-2" id="resetCols">
+            Restaurar padrão
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <a href="{{ url_for('consulta.exportar', empresa_id=empresa_id or '', monofasico=monofasico or '', inconsistencia=inconsistencia or '') }}"
+       class="btn btn-sm btn-success">
+      <i class="bi bi-file-earmark-excel"></i> Exportar
+    </a>
+  </div>
 </div>
 
-<!-- Filtros -->
+<!-- Filtros de linha -->
 <form method="GET" class="card mb-3">
   <div class="card-body">
     <div class="row g-2">
@@ -58,39 +97,46 @@
 </form>
 
 <div class="table-responsive">
-  <table class="table table-sm table-hover align-middle">
+  <table class="table table-sm table-hover align-middle" id="tbl-historico">
     <thead class="table-dark">
       <tr>
-        <th>NCM</th><th>Empresa</th><th>Produto</th>
-        <th>Monofásico</th><th>Grupo</th><th>CST</th>
-        <th>PIS%</th><th>COFINS%</th><th>Inconsistência</th><th>Data</th>
+        <th class="col-ncm">NCM</th>
+        <th class="col-empresa">Empresa</th>
+        <th class="col-produto">Produto</th>
+        <th class="col-monofasico">Monofásico</th>
+        <th class="col-grupo">Grupo</th>
+        <th class="col-cst">CST</th>
+        <th class="col-pis">PIS%</th>
+        <th class="col-cofins">COFINS%</th>
+        <th class="col-inconsistencia">Inconsistência</th>
+        <th class="col-data">Data</th>
       </tr>
     </thead>
     <tbody>
       {% for c in consultas.items %}
       <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.monofasico %}table-success{% endif %}">
-        <td class="font-monospace fw-bold">
+        <td class="font-monospace fw-bold col-ncm">
           <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">{{ c.ncm_consultado }}</a>
         </td>
-        <td><small>{{ c.empresa.razao_social if c.empresa else '—' }}</small></td>
-        <td><small>{{ (c.descricao_produto or '')[:40] }}{% if c.descricao_produto and c.descricao_produto|length > 40 %}...{% endif %}</small></td>
-        <td>
+        <td class="col-empresa"><small>{{ c.empresa.razao_social if c.empresa else '—' }}</small></td>
+        <td class="col-produto"><small>{{ (c.descricao_produto or '')[:40] }}{% if c.descricao_produto and c.descricao_produto|length > 40 %}...{% endif %}</small></td>
+        <td class="col-monofasico">
           {% if c.monofasico %}
             <span class="badge bg-success">Sim</span>
           {% elif c.monofasico == false %}
             <span class="badge bg-danger">Não</span>
           {% else %}—{% endif %}
         </td>
-        <td><small>{{ c.grupo_tributario or '—' }}</small></td>
-        <td class="font-monospace">{{ c.cst_sugerido or '—' }}</td>
-        <td>{{ "%.4f"|format(c.pis_aliquota|float) if c.pis_aliquota is not none else '—' }}</td>
-        <td>{{ "%.4f"|format(c.cofins_aliquota|float) if c.cofins_aliquota is not none else '—' }}</td>
-        <td>
+        <td class="col-grupo"><small>{{ c.grupo_tributario or '—' }}</small></td>
+        <td class="font-monospace col-cst">{{ c.cst_sugerido or '—' }}</td>
+        <td class="col-pis">{{ "%.4f"|format(c.pis_aliquota|float) if c.pis_aliquota is not none else '—' }}</td>
+        <td class="col-cofins">{{ "%.4f"|format(c.cofins_aliquota|float) if c.cofins_aliquota is not none else '—' }}</td>
+        <td class="col-inconsistencia">
           {% if c.inconsistencia_detectada %}
             <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
           {% else %}—{% endif %}
         </td>
-        <td><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
+        <td class="col-data"><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
       </tr>
       {% else %}
       <tr><td colspan="10" class="text-center text-muted py-4">Nenhuma consulta encontrada.</td></tr>
@@ -99,26 +145,68 @@
   </table>
 </div>
 
-<!-- Paginação -->
+<!-- Paginação (preserva filtros ativos) -->
 {% if consultas.pages > 1 %}
+{% set qs_base = '&empresa_id=' ~ (empresa_id or '') ~ '&monofasico=' ~ (monofasico or '') ~ '&inconsistencia=' ~ (inconsistencia or '') ~ '&tipo=' ~ (tipo_filtro or '') ~ '&ncm=' ~ (ncm_filtro or '') %}
 <nav>
   <ul class="pagination pagination-sm justify-content-center">
     {% if consultas.has_prev %}
-      <li class="page-item"><a class="page-link" href="?page={{ consultas.prev_num }}">«</a></li>
+      <li class="page-item"><a class="page-link" href="?page={{ consultas.prev_num }}{{ qs_base }}">«</a></li>
     {% endif %}
     {% for page_num in consultas.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
       {% if page_num %}
         <li class="page-item {% if page_num == consultas.page %}active{% endif %}">
-          <a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a>
+          <a class="page-link" href="?page={{ page_num }}{{ qs_base }}">{{ page_num }}</a>
         </li>
       {% else %}
         <li class="page-item disabled"><span class="page-link">…</span></li>
       {% endif %}
     {% endfor %}
     {% if consultas.has_next %}
-      <li class="page-item"><a class="page-link" href="?page={{ consultas.next_num }}">»</a></li>
+      <li class="page-item"><a class="page-link" href="?page={{ consultas.next_num }}{{ qs_base }}">»</a></li>
     {% endif %}
   </ul>
 </nav>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const LS_KEY = 'tribsync_historico_cols';
+const ALL_COLS = ['col-ncm','col-empresa','col-produto','col-monofasico','col-grupo',
+                  'col-cst','col-pis','col-cofins','col-inconsistencia','col-data'];
+
+function applyColVisibility(hidden) {
+  ALL_COLS.forEach(col => {
+    const show = !hidden.includes(col);
+    document.querySelectorAll('.' + col).forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+    const cb = document.querySelector(`.col-toggle[data-col="${col}"]`);
+    if (cb) cb.checked = show;
+  });
+}
+
+function saveAndApply() {
+  const hidden = [];
+  document.querySelectorAll('.col-toggle').forEach(cb => {
+    if (!cb.checked) hidden.push(cb.dataset.col);
+  });
+  localStorage.setItem(LS_KEY, JSON.stringify(hidden));
+  applyColVisibility(hidden);
+}
+
+// Restaurar ao carregar
+const saved = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+applyColVisibility(saved);
+
+document.querySelectorAll('.col-toggle').forEach(cb => {
+  cb.addEventListener('change', saveAndApply);
+});
+
+document.getElementById('resetCols').addEventListener('click', () => {
+  localStorage.removeItem(LS_KEY);
+  applyColVisibility([]);
+});
+</script>
 {% endblock %}

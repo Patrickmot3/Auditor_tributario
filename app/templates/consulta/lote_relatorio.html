@@ -13,9 +13,19 @@
     {% endif %}
   </h5>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('consulta.exportar', empresa_id=empresa.id if empresa else '') }}" class="btn btn-sm btn-success">
-      <i class="bi bi-file-earmark-excel"></i> Exportar
-    </a>
+    {% if tipo == 'xml' and relatorio.lote_id %}
+      <a href="{{ url_for('consulta.exportar', lote_id=relatorio.lote_id) }}" class="btn btn-sm btn-success">
+        <i class="bi bi-file-earmark-excel"></i> Exportar esta NF-e
+      </a>
+    {% elif tipo == 'xml_lote' and relatorio.lote_ids %}
+      <a href="{{ url_for('consulta.exportar', lote_ids=relatorio.lote_ids|join(',')) }}" class="btn btn-sm btn-success">
+        <i class="bi bi-file-earmark-excel"></i> Exportar este lote
+      </a>
+    {% else %}
+      <a href="{{ url_for('consulta.exportar', empresa_id=empresa.id if empresa else '') }}" class="btn btn-sm btn-success">
+        <i class="bi bi-file-earmark-excel"></i> Exportar
+      </a>
+    {% endif %}
     <a href="{{ url_for('consulta.historico') }}" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-clock-history"></i> Ver histórico
     </a>
@@ -54,6 +64,7 @@
       <table class="table table-sm mb-0">
         <thead class="table-dark">
           <tr>
+            <th style="width:36px"></th>
             <th>N° Documento</th>
             <th>Arquivo</th>
             <th>Emitente</th>
@@ -66,7 +77,17 @@
         </thead>
         <tbody>
           {% for nota in relatorio.notas %}
+          {% set nota_idx = loop.index %}
           <tr {% if nota.erro %}class="table-danger"{% elif nota.inconsistencias %}class="table-warning"{% endif %}>
+            <td class="text-center">
+              {% if nota.itens %}
+              <button class="btn btn-sm p-0 border-0 text-muted toggle-itens"
+                      data-target="itens-nota-{{ nota_idx }}"
+                      title="Ver produtos">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+              {% endif %}
+            </td>
             <td class="font-monospace fw-bold">
               {% if nota.n_nf %}{{ nota.serie }}-{{ nota.n_nf | int }}{% else %}—{% endif %}
             </td>
@@ -88,6 +109,48 @@
               {% endif %}
             </td>
           </tr>
+          {% if nota.itens %}
+          <tr id="itens-nota-{{ nota_idx }}" class="d-none">
+            <td colspan="9" class="p-0 bg-light">
+              <div class="px-4 py-2">
+                <table class="table table-xs table-sm mb-0 border">
+                  <thead class="table-secondary">
+                    <tr>
+                      <th>NCM</th>
+                      <th>Produto</th>
+                      <th>CST Atual</th>
+                      <th>Monofásico</th>
+                      <th>CST Sugerido</th>
+                      <th>Inconsistência</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in nota.itens %}
+                    <tr class="{% if item.inconsistencia %}table-warning{% elif item.monofasico %}table-success{% endif %}">
+                      <td class="font-monospace small">{{ item.ncm }}</td>
+                      <td><small>{{ item.descricao or '—' }}</small></td>
+                      <td class="font-monospace small">{{ item.cst_atual or '—' }}</td>
+                      <td>
+                        {% if item.monofasico %}
+                          <span class="badge bg-success">Sim</span>
+                        {% else %}
+                          <span class="badge bg-danger">Não</span>
+                        {% endif %}
+                      </td>
+                      <td class="font-monospace fw-bold small">{{ item.cst_sugerido or '—' }}</td>
+                      <td>
+                        {% if item.inconsistencia %}
+                          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+                        {% else %}—{% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>
@@ -120,6 +183,7 @@
 </div>
 
 {% if relatorio.get('itens') %}
+<h6 class="mb-2"><i class="bi bi-list-ul"></i> Produtos desta NF-e</h6>
 <div class="table-responsive">
   <table class="table table-sm table-hover">
     <thead class="table-dark">
@@ -153,4 +217,23 @@
   </table>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.toggle-itens').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const targetId = this.dataset.target;
+    const row = document.getElementById(targetId);
+    const icon = this.querySelector('i');
+    if (row.classList.contains('d-none')) {
+      row.classList.remove('d-none');
+      icon.classList.replace('bi-chevron-right', 'bi-chevron-down');
+    } else {
+      row.classList.add('d-none');
+      icon.classList.replace('bi-chevron-down', 'bi-chevron-right');
+    }
+  });
+});
+</script>
 {% endblock %}

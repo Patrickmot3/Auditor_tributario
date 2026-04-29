@@ -164,6 +164,7 @@ def lote_xml():
                 inconsistencias += res.get('inconsistencias', 0)
                 notas.append({
                     'arquivo': arq.filename,
+                    'lote_id': res.get('lote_id'),
                     'ch_nfe': res.get('ch_nfe', ''),
                     'n_nf': res.get('n_nf', ''),
                     'serie': res.get('serie', ''),
@@ -174,13 +175,16 @@ def lote_xml():
                     'monofasicos': res.get('monofasicos', 0),
                     'inconsistencias': res.get('inconsistencias', 0),
                     'erro': res.get('erro'),
+                    'itens': res.get('itens', []),
                 })
+            lote_ids = [n['lote_id'] for n in notas if n.get('lote_id')]
             relatorio = {
                 'arquivo_origem': f'{len(arquivos_xml)} arquivo(s) XML',
                 'total_arquivos': len(arquivos_xml),
                 'total': total, 'ok': ok, 'duplicados': duplicados, 'erros': erros,
                 'monofasicos': monofasicos, 'nao_monofasicos': nao_monofasicos,
                 'inconsistencias': inconsistencias, 'notas': notas,
+                'lote_ids': lote_ids,
             }
             return render_template('consulta/lote_relatorio.html',
                                    empresa=empresa, relatorio=relatorio, tipo='xml_lote')
@@ -275,24 +279,45 @@ def exportar():
     empresa_id = request.args.get('empresa_id', type=int)
     monofasico = request.args.get('monofasico')
     inconsistencia = request.args.get('inconsistencia')
+    lote_id = request.args.get('lote_id', type=int)
+    lote_ids_str = request.args.get('lote_ids', '')
+
+    # Montar lista de lote_ids quando vindo da tela de resultado de lote
+    lote_ids = []
+    if lote_id:
+        lote_ids = [lote_id]
+    elif lote_ids_str:
+        lote_ids = [int(x) for x in lote_ids_str.split(',') if x.strip().isdigit()]
 
     query = Consulta.query
     if not current_user.is_admin:
         ids = [e.id for e in current_user.empresas]
         query = query.filter(Consulta.empresa_id.in_(ids))
-    if empresa_id:
-        query = query.filter(Consulta.empresa_id == empresa_id)
-    if monofasico == '1':
-        query = query.filter(Consulta.monofasico == True)
-    elif monofasico == '0':
-        query = query.filter(Consulta.monofasico == False)
-    if inconsistencia == '1':
-        query = query.filter(Consulta.inconsistencia_detectada == True)
+
+    if lote_ids:
+        # Exportar apenas as consultas pertencentes ao(s) lote(s) desta processamento
+        from app.models.consulta import LoteItem
+        consulta_ids = db.session.query(LoteItem.consulta_id).filter(
+            LoteItem.lote_id.in_(lote_ids),
+            LoteItem.consulta_id.isnot(None)
+        ).distinct()
+        query = query.filter(Consulta.id.in_(consulta_ids))
+        nome_arquivo = 'tribsync_lote.xlsx'
+    else:
+        if empresa_id:
+            query = query.filter(Consulta.empresa_id == empresa_id)
+        if monofasico == '1':
+            query = query.filter(Consulta.monofasico == True)
+        elif monofasico == '0':
+            query = query.filter(Consulta.monofasico == False)
+        if inconsistencia == '1':
+            query = query.filter(Consulta.inconsistencia_detectada == True)
+        nome_arquivo = 'tribsync_consultas.xlsx'
 
     consultas = query.order_by(Consulta.created_at.desc()).all()
 
     from app.services.export_excel import gerar_excel_consultas
     import io
     output = gerar_excel_consultas(consultas)
-    return send_file(output, download_name='tribsync_consultas.xlsx',
+    return send_file(output, download_name=nome_arquivo,
                      as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

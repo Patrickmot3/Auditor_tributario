@@ -354,6 +354,7 @@ def processar_lote_compactado(caminho: str, empresa_id: int, nome_arquivo: str) 
 
         notas.append({
             'arquivo': nome_xml,
+            'lote_id': resultado.get('lote_id'),
             'ch_nfe': resultado.get('ch_nfe', ''),
             'n_nf': resultado.get('n_nf', ''),
             'serie': resultado.get('serie', ''),
@@ -364,7 +365,10 @@ def processar_lote_compactado(caminho: str, empresa_id: int, nome_arquivo: str) 
             'monofasicos': resultado.get('monofasicos', 0),
             'inconsistencias': resultado.get('inconsistencias', 0),
             'erro': resultado.get('erro'),
+            'itens': resultado.get('itens', []),
         })
+
+    lote_ids = [n['lote_id'] for n in notas if n.get('lote_id')]
 
     return {
         'arquivo_origem': nome_arquivo,
@@ -377,4 +381,5 @@ def processar_lote_compactado(caminho: str, empresa_id: int, nome_arquivo: str) 
         'nao_monofasicos': nao_monofasicos_geral,
         'inconsistencias': inconsistencias_geral,
         'notas': notas,
+        'lote_ids': lote_ids,
     }
