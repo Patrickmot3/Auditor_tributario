@@ -83,6 +83,16 @@ def lote_manual():
                            empresa=empresa, resultados=resultados, empresas=empresas)
 
 
+@consulta_bp.route('/lote/excel/modelo')
+@login_required
+def modelo_excel():
+    from app.services.export_excel import gerar_template_importacao
+    output = gerar_template_importacao()
+    return send_file(output, download_name='tribsync_modelo_importacao.xlsx',
+                     as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 @consulta_bp.route('/lote/excel', methods=['GET', 'POST'])
 @login_required
 def lote_excel():

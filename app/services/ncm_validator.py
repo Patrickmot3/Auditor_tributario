@@ -163,15 +163,14 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
                 '(Solução de Consulta COSIT nº 55/2018).'
             )
 
-    # Detectar inconsistência
+    # Detectar inconsistência: CST da NF-e difere do CST que o sistema sugere
     inconsistencia = False
-    if cst_atual:
-        if registro.monofasico and cst_atual not in ('04', '70', '75'):
-            inconsistencia = True
-        elif not registro.monofasico and cst_atual == '04':
-            inconsistencia = True
-        if e_varejista and registro.monofasico and pis > 0:
-            inconsistencia = True
+    if cst_atual and cst_sugerido and cst_atual.strip() != cst_sugerido.strip():
+        inconsistencia = True
+        observacao += (
+            f' CST informado na NF-e ({cst_atual.strip()}) '
+            f'difere do CST sugerido ({cst_sugerido}).'
+        )
 
     resultado = {
         'ncm': ncm_limpo,

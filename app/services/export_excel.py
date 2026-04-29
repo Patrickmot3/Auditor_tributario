@@ -5,6 +5,55 @@ import io
 import xlsxwriter
 
 
+def gerar_template_importacao():
+    """Gera planilha modelo para importação de NCMs no TribSync."""
+    output = io.BytesIO()
+    wb = xlsxwriter.Workbook(output, {'in_memory': True})
+    ws = wb.add_worksheet('Modelo TribSync')
+
+    fmt_cab = wb.add_format({
+        'bold': True, 'bg_color': '#1e3a5f', 'font_color': 'white',
+        'border': 1, 'align': 'center', 'valign': 'vcenter',
+    })
+    fmt_obrig = wb.add_format({
+        'bold': True, 'bg_color': '#d4edda', 'border': 1, 'align': 'center',
+    })
+    fmt_exemplo = wb.add_format({'border': 1, 'color': '#6c757d', 'italic': True})
+
+    colunas = [
+        ('Código',        10, False),
+        ('Descrição',     40, False),
+        ('Tipo do Item',  22, False),
+        ('Cód. NCM',      14, True),   # obrigatória
+        ('Cód. CEST',     12, False),
+        ('CST Atual',     12, False),
+    ]
+
+    for col_idx, (nome, largura, obrig) in enumerate(colunas):
+        fmt = fmt_obrig if obrig else fmt_cab
+        ws.write(0, col_idx, nome + (' *' if obrig else ''), fmt)
+        ws.set_column(col_idx, col_idx, largura)
+
+    ws.set_row(0, 22)
+
+    # Linha de exemplo
+    exemplos = [
+        'PROD001', 'Amortecedor traseiro', 'Mercadoria para Revenda',
+        '87089990', '01.001.00', '04',
+    ]
+    for col_idx, val in enumerate(exemplos):
+        ws.write(1, col_idx, val, fmt_exemplo)
+
+    # Nota de rodapé
+    ws.write(3, 0, '* Coluna obrigatória', wb.add_format({'italic': True, 'color': '#dc3545'}))
+    ws.write(4, 0, 'CST Atual: informe o CST usado na NF-e para que o sistema detecte inconsistências.',
+             wb.add_format({'italic': True, 'color': '#6c757d'}))
+
+    wb.close()
+    output.seek(0)
+    return output
+
+
 def _numero_nfe_por_consulta(consultas):
     """
     Retorna dict {consulta_id: 'serie-nNF'} buscando o lote mais recente de cada consulta.

@@ -4,9 +4,9 @@
 {% block content %}
 <h5 class="mb-3"><i class="bi bi-file-earmark-excel"></i> Importação de Planilha Excel</h5>
 
-<div class="row">
+<div class="row g-4">
   <div class="col-md-7">
-    <div class="card mb-4">
+    <div class="card mb-3">
       <div class="card-body">
         <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -22,7 +22,10 @@
             </select>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">Arquivo Excel (.xlsx/.xls) <span class="text-danger">*</span></label>
+            <label class="form-label fw-semibold">
+              Arquivo Excel <span class="text-danger">*</span>
+              <small class="text-muted fw-normal">(.xlsx ou .xls)</small>
+            </label>
             <input type="file" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
           </div>
           <button type="submit" class="btn btn-success w-100">
@@ -31,28 +34,59 @@
         </form>
       </div>
     </div>
+
+    <!-- Download do modelo -->
+    <div class="d-grid">
+      <a href="{{ url_for('consulta.modelo_excel') }}" class="btn btn-outline-primary">
+        <i class="bi bi-file-earmark-arrow-down"></i> Baixar modelo de importação (.xlsx)
+      </a>
+    </div>
   </div>
-  <div class="col-md-5">
+
+  <div class="col-md-5 d-flex flex-column gap-3">
+
+    <!-- Modelo TribSync -->
     <div class="card">
-      <div class="card-header"><i class="bi bi-info-circle"></i> Formato esperado</div>
-      <div class="card-body">
-        <p class="text-muted small mb-2">A planilha deve conter as colunas (o sistema detecta automaticamente):</p>
-        <table class="table table-sm table-bordered">
-          <thead class="table-secondary"><tr>
-            <th>Coluna</th><th>Exemplo</th>
-          </tr></thead>
+      <div class="card-header fw-semibold">
+        <i class="bi bi-file-earmark-spreadsheet text-primary"></i> Modelo TribSync
+      </div>
+      <div class="card-body p-2">
+        <table class="table table-sm table-bordered mb-1">
+          <thead class="table-secondary">
+            <tr><th>Coluna</th><th>Exemplo</th></tr>
+          </thead>
           <tbody>
-            <tr><td>Código</td><td>PROD001</td></tr>
-            <tr><td>Descrição</td><td>Amortecedor traseiro</td></tr>
-            <tr><td>Tipo do Item</td><td>00</td></tr>
-            <tr><td>Cód. NBM</td><td>87084090</td></tr>
-            <tr><td><strong>Cód. NCM</strong></td><td><strong>87084090</strong></td></tr>
-            <tr><td>Cód. CEST</td><td>01.001.00</td></tr>
+            <tr><td>Código</td><td class="text-muted">PROD001</td></tr>
+            <tr><td>Descrição</td><td class="text-muted">Amortecedor traseiro</td></tr>
+            <tr><td>Tipo do Item</td><td class="text-muted">Mercadoria...</td></tr>
+            <tr class="table-success"><td><strong>Cód. NCM *</strong></td><td><strong>87089990</strong></td></tr>
+            <tr><td>Cód. CEST</td><td class="text-muted">01.001.00</td></tr>
+            <tr><td>CST Atual</td><td class="text-muted">04</td></tr>
           </tbody>
         </table>
-        <small class="text-muted">A coluna NCM é obrigatória. As demais são opcionais.</small>
+        <small class="text-muted">* obrigatória — demais opcionais</small>
       </div>
     </div>
+
+    <!-- Formato Domínio -->
+    <div class="card border-info">
+      <div class="card-header text-info fw-semibold">
+        <i class="bi bi-check2-circle"></i> Compatível com Domínio Sistemas
+      </div>
+      <div class="card-body p-2">
+        <p class="small mb-2">
+          O sistema aceita diretamente o relatório <strong>Produtos</strong> exportado
+          pelo Domínio (<code>Produtos.xls</code>). O cabeçalho e as colunas são
+          detectados automaticamente.
+        </p>
+        <p class="small text-muted mb-0">
+          <i class="bi bi-info-circle"></i>
+          Se o arquivo <code>.xls</code> não abrir, salve-o como <code>.xlsx</code>
+          no Excel antes de importar.
+        </p>
+      </div>
+    </div>
+
   </div>
 </div>
 {% endblock %}

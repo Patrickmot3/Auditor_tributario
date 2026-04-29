@@ -1,7 +1,9 @@
 """
 Serviço de importação de planilha Excel para consulta em lote.
-Colunas esperadas: Código | Descrição | Tipo do Item | Cód. NBM | Cód. NCM | Cód. CEST
+Colunas esperadas: Código | Descrição | Tipo do Item | Cód. NBM | Cód. NCM | Cód. CEST | CST Atual
+Também aceita o formato de relatório de produtos do sistema Domínio Sistemas.
 """
+import os
 import logging
 from datetime import datetime, timezone
 import pandas as pd
@@ -12,13 +14,35 @@ from app.services.ncm_validator import validar_ncm, _normalizar_ncm
 logger = logging.getLogger(__name__)
 
 COLUNAS_ESPERADAS = {
-    'codigo': ['código', 'codigo', 'cod', 'cód', 'cód.', 'cod.'],
+    'codigo':   ['código', 'codigo', 'cod', 'cód', 'cód.', 'cod.'],
     'descricao': ['descrição', 'descricao', 'desc', 'nome', 'produto'],
-    'tipo': ['tipo do item', 'tipo item', 'tipo'],
-    'nbm': ['cód. nbm', 'cod. nbm', 'nbm', 'cód nbm'],
-    'ncm': ['cód. ncm', 'cod. ncm', 'ncm', 'cód ncm', 'código ncm'],
-    'cest': ['cód. cest', 'cod. cest', 'cest', 'cód cest'],
+    'tipo':     ['tipo do item', 'tipo item', 'tipo'],
+    'nbm':      ['cód. nbm', 'cod. nbm', 'nbm', 'cód nbm'],
+    'ncm':      ['cód. ncm', 'cod. ncm', 'ncm', 'cód ncm', 'código ncm'],
+    'cest':     ['cód. cest', 'cod. cest', 'cest', 'cód cest'],
+    'cst':      ['cst atual', 'cst', 'cst pis', 'cst cofins'],
 }
+
+
+def _ler_excel(caminho_arquivo, **kwargs):
+    """
+    Lê arquivo Excel retornando DataFrame. Suporta .xlsx e .xls.
+    Para .xls usa xlrd como engine principal e calamine como fallback
+    (necessário para arquivos exportados pelo Domínio Sistemas).
+    """
+    ext = os.path.splitext(caminho_arquivo)[1].lower()
+    if ext == '.xlsx':
+        return pd.read_excel(caminho_arquivo, dtype=str, **kwargs)
+    # .xls: xlrd primeiro, calamine como fallback
+    for engine in ('xlrd', 'calamine'):
+        try:
+            return pd.read_excel(caminho_arquivo, dtype=str, engine=engine, **kwargs)
+        except Exception:
+            continue
+    raise Exception(
+        'Não foi possível ler o arquivo .xls. '
+        'Abra no Excel, salve como .xlsx e importe novamente.'
+    )
 
 
 def _detectar_coluna(colunas_df, candidatos):
@@ -42,23 +66,25 @@ def _detectar_cabecalho(df_raw):
 def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
     """
     Processa planilha Excel e valida cada NCM.
+    Aceita o modelo TribSync e o relatório de produtos do sistema Domínio.
     Retorna dict com relatório do processamento.
     """
     try:
-        df_raw = pd.read_excel(caminho_arquivo, header=None, dtype=str)
+        df_raw = _ler_excel(caminho_arquivo, header=None)
     except Exception as e:
         logger.error(f'Erro ao ler Excel: {e}')
-        return {'erro': f'Erro ao ler arquivo: {e}'}
+        return {'erro': str(e)}
 
     linha_cab = _detectar_cabecalho(df_raw)
-    df = pd.read_excel(caminho_arquivo, header=linha_cab, dtype=str)
+    df = _ler_excel(caminho_arquivo, header=linha_cab)
     df.columns = [str(c).strip() for c in df.columns]
 
-    col_ncm = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['ncm'])
-    col_codigo = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['codigo'])
+    col_ncm      = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['ncm'])
+    col_codigo   = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['codigo'])
     col_descricao = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['descricao'])
-    col_cest = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['cest'])
-    col_nbm = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['nbm'])
+    col_cest     = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['cest'])
+    col_nbm      = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['nbm'])
+    col_cst      = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['cst'])
 
     if not col_ncm:
         return {'erro': 'Coluna NCM não encontrada na planilha.'}
@@ -92,10 +118,13 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
         total += 1
         linha_num = idx + linha_cab + 2
 
-        codigo = str(row.get(col_codigo, '') or '').strip() if col_codigo else None
+        codigo    = str(row.get(col_codigo, '') or '').strip() if col_codigo else None
         descricao = str(row.get(col_descricao, '') or '').strip() if col_descricao else None
-        cest = str(row.get(col_cest, '') or '').strip() if col_cest else None
-        nbm = str(row.get(col_nbm, '') or '').strip() if col_nbm else None
+        cest      = str(row.get(col_cest, '') or '').strip() if col_cest else None
+        nbm       = str(row.get(col_nbm, '') or '').strip() if col_nbm else None
+        cst_atual = str(row.get(col_cst, '') or '').strip() if col_cst else None
+        if cst_atual and cst_atual.lower() in ('nan', 'none'):
+            cst_atual = None
 
         # Verificar duplicidade
         existente = Consulta.query.filter_by(
@@ -105,7 +134,7 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
         status_item = 'duplicado' if existente else 'ok'
 
         try:
-            resultado = validar_ncm(ncm_limpo, empresa_id)
+            resultado = validar_ncm(ncm_limpo, empresa_id, cst_atual)
 
             # Atualizar campos adicionais na consulta gravada
             consulta = Consulta.query.filter_by(
