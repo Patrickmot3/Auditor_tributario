@@ -486,7 +486,12 @@ def verificar_atualizacao(tabela_id, executado_por='scheduler_auto'):
 def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
     info = TABELAS_SPED.get(tabela_id)
     if not info:
-        return {'erro': f'Tabela {tabela_id} não configurada'}
+        return {
+            'status': 'erro',
+            'mensagem': f'Tabela {tabela_id} não possui URL de atualização automática. Mantenha via seed.',
+            'inseridos': 0,
+            'atualizados': 0,
+        }
 
     versao_rfb = _checar_versao(tabela_id)
     inseridos = atualizados = 0

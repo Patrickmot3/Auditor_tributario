@@ -86,6 +86,8 @@ def atualizacao_status():
         LogAtualizacao.tabela_sped == 'seed'
     ).order_by(LogAtualizacao.data_importacao.desc()).first()
 
+    from app.services.rfb_scraper import TABELAS_SPED
+
     status_tabelas = []
     for ts in sorted(tabelas_map.keys()):
         grupos_ts = tabelas_map[ts]['grupos']
@@ -107,6 +109,7 @@ def atualizacao_status():
             'data_rfb': log.data_atualizacao_rfb.strftime('%d/%m/%Y') if log and log.data_atualizacao_rfb else 'N/A',
             'data_importacao': _fmt_brt(log.data_importacao) if log else 'N/A',
             'status': (log.status if tem_log_proprio else 'seed_inicial') if log else 'sem_dados',
+            'tem_scraper': ts in TABELAS_SPED,
         })
 
     from app.services.scheduler import get_proximas_execucoes
@@ -127,6 +130,27 @@ def atualizacao_executar():
         flash(f'Tabela {tabela} atualizada: {resultado["inseridos"]} inseridos, {resultado["atualizados"]} atualizados.', 'success')
     else:
         flash(f'Erro ao atualizar tabela {tabela}: {resultado.get("mensagem")}', 'danger')
+    return redirect(url_for('admin.atualizacao_status'))
+
+
+@admin_bp.route('/atualizacao/executar_todas', methods=['POST'])
+@login_required
+@admin_required
+def atualizacao_executar_todas():
+    from app.services.rfb_scraper import atualizar_tabela, TABELAS_SPED
+    total_ins = total_atu = erros = 0
+    for tabela in sorted(TABELAS_SPED.keys()):
+        resultado = atualizar_tabela(tabela, executado_por=current_user.email)
+        if resultado.get('status') == 'sucesso':
+            total_ins += resultado.get('inseridos', 0)
+            total_atu += resultado.get('atualizados', 0)
+        else:
+            erros += 1
+            flash(f'Erro na tabela {tabela}: {resultado.get("mensagem")}', 'danger')
+    if total_ins or total_atu:
+        flash(f'Atualização concluída: {total_ins} inseridos, {total_atu} atualizados em {len(TABELAS_SPED) - erros} tabelas.', 'success')
+    elif not erros:
+        flash('Todas as tabelas já estão na versão mais recente.', 'info')
     return redirect(url_for('admin.atualizacao_status'))
 
 

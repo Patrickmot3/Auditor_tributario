@@ -2,7 +2,15 @@
 {% block title %}Status Tabelas SPED{% endblock %}
 
 {% block content %}
-<h5 class="mb-4"><i class="bi bi-arrow-repeat"></i> Status das Tabelas SPED — EFD-Contribuições</h5>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Status das Tabelas SPED — EFD-Contribuições</h5>
+  <form method="POST" action="{{ url_for('admin.atualizacao_executar_todas') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-primary btn-sm">
+      <i class="bi bi-arrow-clockwise"></i> Atualizar todas as tabelas
+    </button>
+  </form>
+</div>
 
 <div class="row g-3 mb-4">
   {% for t in status_tabelas %}
@@ -36,6 +44,7 @@
           <dt class="col-6">Última importação</dt>
           <dd class="col-6">{{ t.data_importacao }}</dd>
         </dl>
+        {% if t.tem_scraper %}
         <form method="POST" action="{{ url_for('admin.atualizacao_executar') }}" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="tabela" value="{{ t.tabela }}">
@@ -43,6 +52,11 @@
             <i class="bi bi-arrow-clockwise"></i> Atualizar agora
           </button>
         </form>
+        {% else %}
+        <span class="text-muted small" title="Esta tabela não possui URL de download automático na RFB. Atualize via seed.">
+          <i class="bi bi-lock"></i> Atualização manual
+        </span>
+        {% endif %}
       </div>
     </div>
   </div>

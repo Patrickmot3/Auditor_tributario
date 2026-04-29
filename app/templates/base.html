@@ -115,7 +115,7 @@
   <div class="px-3 py-2 text-muted small text-uppercase fw-bold mb-1">Cadastros</div>
   <ul class="nav flex-column">
     <li class="nav-item">
-      <a href="{{ url_for('empresa.lista') }}" class="nav-link {% if 'empresa' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('empresa.lista') }}" class="nav-link {% if request.endpoint and 'empresa' in request.endpoint %}active{% endif %}">
         <i class="bi bi-building"></i> Empresas
       </a>
     </li>
@@ -130,17 +130,17 @@
       </a>
     </li>
     <li class="nav-item">
-      <a href="{{ url_for('admin.atualizacao_status') }}" class="nav-link {% if 'atualizacao' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('admin.atualizacao_status') }}" class="nav-link {% if request.endpoint and 'atualizacao' in request.endpoint %}active{% endif %}">
         <i class="bi bi-arrow-repeat"></i> Tabelas SPED
       </a>
     </li>
     <li class="nav-item">
-      <a href="{{ url_for('admin.usuarios') }}" class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('admin.usuarios') }}" class="nav-link {% if request.endpoint and 'usuario' in request.endpoint %}active{% endif %}">
         <i class="bi bi-people"></i> Usuários
       </a>
     </li>
     <li class="nav-item">
-      <a href="{{ url_for('admin.aliquotas') }}" class="nav-link {% if 'aliquota' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('admin.aliquotas') }}" class="nav-link {% if request.endpoint and 'aliquota' in request.endpoint %}active{% endif %}">
         <i class="bi bi-percent"></i> Alíquotas
       </a>
     </li>
