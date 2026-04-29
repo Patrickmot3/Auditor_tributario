@@ -90,6 +90,127 @@ def _numero_nfe_por_consulta(consultas):
     return {row.consulta_id: row.nome_lote for row in rows}
 
 
+def gerar_excel_lote_items(lote_ids):
+    """
+    Exporta um lote linha-a-linha (via LoteItem), preservando produtos duplicados
+    com descrições diferentes que pertencem ao mesmo NCM.
+    """
+    from app.models.consulta import LoteItem, LoteConsulta, Consulta
+    from app.extensions import db
+
+    items = (
+        LoteItem.query
+        .filter(LoteItem.lote_id.in_(lote_ids))
+        .order_by(LoteItem.lote_id, LoteItem.linha_original)
+        .all()
+    )
+
+    lote_cache = {
+        l.id: l
+        for l in LoteConsulta.query.filter(LoteConsulta.id.in_(lote_ids)).all()
+    }
+    consulta_ids = [i.consulta_id for i in items if i.consulta_id]
+    consulta_cache = {
+        c.id: c
+        for c in Consulta.query.filter(Consulta.id.in_(consulta_ids)).all()
+    }
+
+    output = io.BytesIO()
+    wb = xlsxwriter.Workbook(output, {'in_memory': True})
+    ws = wb.add_worksheet('Lote TribSync')
+
+    fmt_cab = wb.add_format({
+        'bold': True, 'bg_color': '#1e3a5f', 'font_color': 'white',
+        'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True,
+    })
+    fmt_mono  = wb.add_format({'bg_color': '#d4edda', 'border': 1})
+    fmt_incon = wb.add_format({'bg_color': '#f8d7da', 'border': 1})
+    fmt_erro  = wb.add_format({'bg_color': '#e2e3e5', 'border': 1, 'italic': True})
+    fmt_norm  = wb.add_format({'border': 1})
+
+    colunas = [
+        ('Empresa',              28),
+        ('N° Documento NF-e',    20),
+        ('Linha',                 7),
+        ('NCM',                  12),
+        ('Descrição do Produto', 40),
+        ('Código Produto',       15),
+        ('Cód. CEST',            12),
+        ('Monofásico',           12),
+        ('Grupo Tributário',     25),
+        ('Base Legal',           38),
+        ('CST Atual NF-e',       14),
+        ('CST Sugerido',         14),
+        ('Regime PIS/COFINS',    42),
+        ('CFOP Sugerido',        14),
+        ('Alíq. PIS (%)',        13),
+        ('Alíq. COFINS (%)',     15),
+        ('Posição Cadeia',       16),
+        ('Inconsistência',       16),
+        ('Status',               12),
+        ('Observação',           45),
+    ]
+
+    for ci, (nome, larg) in enumerate(colunas):
+        ws.write(0, ci, nome, fmt_cab)
+        ws.set_column(ci, ci, larg)
+    ws.set_row(0, 30)
+    ws.autofilter(0, 0, 0, len(colunas) - 1)
+
+    from app.services.ncm_validator import CST_DESCRICAO
+
+    for ri, item in enumerate(items, start=1):
+        lote   = lote_cache.get(item.lote_id)
+        c      = consulta_cache.get(item.consulta_id) if item.consulta_id else None
+        erro   = item.status_processamento == 'erro'
+
+        empresa_nome = c.empresa.razao_social if c and c.empresa else ''
+        doc_nfe      = lote.nome_lote if lote else ''
+        mono_str     = ('Sim' if c.monofasico else 'Não') if c else '—'
+        incon_str    = ('Sim' if c.inconsistencia_detectada else 'Não') if c else '—'
+        cst_sugerido = c.cst_sugerido or '' if c else ''
+        regime_desc  = CST_DESCRICAO.get(cst_sugerido, '') if cst_sugerido else ''
+
+        if erro:
+            fmt = fmt_erro
+        elif c and c.inconsistencia_detectada:
+            fmt = fmt_incon
+        elif c and c.monofasico:
+            fmt = fmt_mono
+        else:
+            fmt = fmt_norm
+
+        linha = [
+            empresa_nome,
+            doc_nfe,
+            item.linha_original or '',
+            item.ncm or '',
+            item.descricao or '',
+            item.codigo_produto or '',
+            item.codigo_cest or '',
+            mono_str,
+            (c.grupo_tributario or '') if c else '',
+            (c.lei_aplicada or '') if c else '',
+            (c.cst_atual or '') if c else '',
+            cst_sugerido,
+            regime_desc,
+            (c.cfop_sugerido or '') if c else '',
+            float(c.pis_aliquota) if c and c.pis_aliquota is not None else 0,
+            float(c.cofins_aliquota) if c and c.cofins_aliquota is not None else 0,
+            (c.posicao_cadeia or '') if c else '',
+            incon_str,
+            item.status_processamento or '',
+            (c.observacao or '') if c else (item.mensagem_erro or ''),
+        ]
+
+        for ci, valor in enumerate(linha):
+            ws.write(ri, ci, valor, fmt)
+
+    wb.close()
+    output.seek(0)
+    return output
+
+
 def gerar_excel_consultas(consultas):
     numero_nfe_map = _numero_nfe_por_consulta(consultas)
 

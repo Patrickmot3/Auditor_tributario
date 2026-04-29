@@ -305,29 +305,26 @@ def exportar():
         query = query.filter(Consulta.empresa_id.in_(ids))
 
     if lote_ids:
-        # Exportar apenas as consultas pertencentes ao(s) lote(s) desta processamento
-        from app.models.consulta import LoteItem
-        consulta_ids = db.session.query(LoteItem.consulta_id).filter(
-            LoteItem.lote_id.in_(lote_ids),
-            LoteItem.consulta_id.isnot(None)
-        ).distinct()
-        query = query.filter(Consulta.id.in_(consulta_ids))
-        nome_arquivo = 'tribsync_lote.xlsx'
-    else:
-        if empresa_id:
-            query = query.filter(Consulta.empresa_id == empresa_id)
-        if monofasico == '1':
-            query = query.filter(Consulta.monofasico == True)
-        elif monofasico == '0':
-            query = query.filter(Consulta.monofasico == False)
-        if inconsistencia == '1':
-            query = query.filter(Consulta.inconsistencia_detectada == True)
-        nome_arquivo = 'tribsync_consultas.xlsx'
+        # Exportar lote linha-a-linha via LoteItem — preserva NCMs duplicados com
+        # descrições diferentes que seriam colapsados na tabela Consulta
+        from app.services.export_excel import gerar_excel_lote_items
+        output = gerar_excel_lote_items(lote_ids)
+        return send_file(output, download_name='tribsync_lote.xlsx',
+                         as_attachment=True,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    if empresa_id:
+        query = query.filter(Consulta.empresa_id == empresa_id)
+    if monofasico == '1':
+        query = query.filter(Consulta.monofasico == True)
+    elif monofasico == '0':
+        query = query.filter(Consulta.monofasico == False)
+    if inconsistencia == '1':
+        query = query.filter(Consulta.inconsistencia_detectada == True)
 
     consultas = query.order_by(Consulta.created_at.desc()).all()
 
     from app.services.export_excel import gerar_excel_consultas
-    import io
     output = gerar_excel_consultas(consultas)
-    return send_file(output, download_name=nome_arquivo,
+    return send_file(output, download_name='tribsync_consultas.xlsx',
                      as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

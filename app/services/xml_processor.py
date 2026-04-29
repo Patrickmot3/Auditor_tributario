@@ -94,13 +94,15 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
         x_prod = _tag(prod, 'xProd')
         cest = _tag(prod, 'CEST')
 
-        # CST atual da NF-e
+        # CST atual da NF-e — busca por iter() para ignorar namespace
         imposto = det.find('nfe:imposto', NS) or det.find('imposto')
         cst_atual = None
-        if imposto:
-            pis_el = imposto.find('.//nfe:CST', NS) or imposto.find('.//CST')
-            if pis_el is not None:
-                cst_atual = pis_el.text.strip()
+        if imposto is not None:
+            for el in imposto.iter():
+                tag = el.tag
+                if (tag.endswith('}CST') or tag == 'CST') and el.text and el.text.strip():
+                    cst_atual = el.text.strip()
+                    break
 
         existente = Consulta.query.filter_by(
             empresa_id=empresa_id, ncm_consultado=ncm_limpo
