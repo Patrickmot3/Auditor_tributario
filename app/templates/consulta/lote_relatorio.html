@@ -141,7 +141,7 @@
                       </td>
                       <td class="font-monospace fw-bold small">{{ item.cst_sugerido or '—' }}</td>
                       <td><small class="text-muted">
-                        {% if item.grupo %}{{ cst_descricao.get(item.cst_sugerido, '—') }}
+                        {% if item.grupo %}{{ item.grupo }}
                         {% else %}<em>NCM não localizado — verificar manualmente</em>{% endif %}
                       </small></td>
                       <td>

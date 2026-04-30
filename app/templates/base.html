@@ -60,12 +60,17 @@
     .card-resultado-nao { border-left: 4px solid #dc3545; }
     .card-resultado-inconsistencia { border-left: 4px solid #ffc107; }
     .table-hover tbody tr:hover { background: rgba(255,255,255,.04); }
-    /* Legibilidade em linhas de inconsistência (table-warning tem fundo amarelo) */
-    .table-warning td, .table-warning th { color: #1a1a1a !important; }
-    .table-warning .text-muted { color: #555555 !important; }
-    .table-warning small { color: #444444 !important; }
-    .table-warning button.toggle-itens { color: #333333 !important; }
-    .table-warning .btn { color: #1a1a1a !important; }
+    /* Legibilidade em linhas coloridas (table-warning = amarelo, table-success = verde) */
+    .table-warning td, .table-warning th,
+    .table-success td, .table-success th { color: #1a1a1a !important; }
+    .table-warning .text-muted,
+    .table-success .text-muted { color: #555555 !important; }
+    .table-warning small,
+    .table-success small { color: #444444 !important; }
+    .table-warning button.toggle-itens,
+    .table-success button.toggle-itens { color: #333333 !important; }
+    .table-warning .btn,
+    .table-success .btn { color: #1a1a1a !important; }
     @media (max-width: 768px) {
       .sidebar { display: none; }
       .main-content { margin-left: 0; }

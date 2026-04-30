@@ -136,7 +136,7 @@ def gerar_excel_lote_items(lote_ids):
         ('Descrição do Produto', 40),
         ('Código Produto',       15),
         ('Cód. CEST',            12),
-        ('Monofásico',           12),
+        ('Exceção PIS/COFINS',   18),
         ('Grupo Tributário',     25),
         ('Base Legal',           38),
         ('CST Atual NF-e',       14),
@@ -166,7 +166,8 @@ def gerar_excel_lote_items(lote_ids):
 
         empresa_nome = c.empresa.razao_social if c and c.empresa else ''
         doc_nfe      = lote.nome_lote if lote else ''
-        mono_str     = ('Sim' if c.monofasico else 'Não') if c else '—'
+        excecao_ok   = c.monofasico or c.cst_sugerido == '05' if c else False
+        mono_str     = ('Sim' if excecao_ok else 'Não') if c else '—'
         incon_str    = ('Sim' if c.inconsistencia_detectada else 'Não') if c else '—'
         cst_sugerido = c.cst_sugerido or '' if c else ''
         grupo_ok     = bool(c and c.grupo_tributario)
@@ -229,7 +230,7 @@ def gerar_excel_consultas(consultas):
 
     colunas = [
         'Empresa', 'CNPJ', 'N° Documento NF-e', 'NCM', 'Descrição do Produto',
-        'Código Produto', 'Cód. CEST', 'Monofásico', 'Grupo Tributário', 'Base Legal',
+        'Código Produto', 'Cód. CEST', 'Exceção PIS/COFINS', 'Grupo Tributário', 'Base Legal',
         'Tabela SPED', 'CST Sugerido Entrada', 'CST Sugerido Saída',
         'CFOP Sugerido', 'Alíquota PIS (%)', 'Alíquota COFINS (%)',
         'Posição na Cadeia', 'Inconsistência Detectada', 'Observação',
@@ -247,13 +248,13 @@ def gerar_excel_consultas(consultas):
 
     for row_idx, c in enumerate(consultas, start=1):
         empresa = c.empresa
-        monofasico_str = 'Sim' if c.monofasico else 'Não'
+        monofasico_str = 'Sim' if (c.monofasico or c.cst_sugerido == '05') else 'Não'
         inconsistencia_str = 'Sim' if c.inconsistencia_detectada else 'Não'
         numero_nfe = numero_nfe_map.get(c.id, '')
 
         if c.inconsistencia_detectada:
             fmt = fmt_inconsistencia
-        elif c.monofasico:
+        elif c.monofasico or c.cst_sugerido == '05':
             fmt = fmt_monofasico
         else:
             fmt = fmt_normal
