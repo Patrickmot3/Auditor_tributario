@@ -189,6 +189,7 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
                 'cst_sugerido':  resultado.get('cst_sugerido'),
                 'inconsistencia': resultado.get('inconsistencia_detectada'),
                 'grupo':         resultado.get('grupo'),
+                'lei':           resultado.get('lei'),
                 'status':        status_item,
             })
 

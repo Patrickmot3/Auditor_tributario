@@ -121,6 +121,7 @@
                       <th>CST Atual</th>
                       <th>Regime</th>
                       <th>CST Sugerido</th>
+                      <th>Grupo Tributário</th>
                       <th>Base Legal</th>
                       <th>Inconsistência</th>
                     </tr>
@@ -140,13 +141,13 @@
                         {% else %}—{% endif %}
                       </td>
                       <td class="font-monospace fw-bold small">{{ item.cst_sugerido or '—' }}</td>
-                      <td><small class="text-muted">
-                        {% if item.grupo %}{{ item.grupo }}
-                        {% else %}<em>NCM não localizado — verificar manualmente</em>{% endif %}
-                      </small></td>
+                      <td><small>{{ item.grupo or '—' }}</small></td>
+                      <td><small class="text-muted">{{ item.lei or '—' }}</small></td>
                       <td>
                         {% if item.inconsistencia %}
-                          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+                          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> CST divergente</span>
+                        {% elif not item.grupo %}
+                          <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> NCM não localizado</span>
                         {% else %}—{% endif %}
                       </td>
                     </tr>
@@ -206,6 +207,7 @@
         <th>CST Atual</th>
         <th>Regime</th>
         <th>CST Sugerido</th>
+        <th>Grupo Tributário</th>
         <th>Base Legal</th>
         <th>Inconsistência</th>
         {% if tipo == 'excel' %}<th>Status</th>{% endif %}
@@ -229,13 +231,13 @@
           {% else %}—{% endif %}
         </td>
         <td class="font-monospace fw-bold">{{ item.cst_sugerido or '—' }}</td>
-        <td><small class="text-muted">
-          {% if item.grupo %}{{ cst_descricao.get(item.cst_sugerido, '—') }}
-          {% else %}<em>NCM não localizado — verificar manualmente</em>{% endif %}
-        </small></td>
+        <td><small>{{ item.grupo or '—' }}</small></td>
+        <td><small class="text-muted">{{ item.lei or '—' }}</small></td>
         <td>
           {% if item.inconsistencia %}
-            <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+            <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> CST divergente</span>
+          {% elif not item.grupo %}
+            <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> NCM não localizado</span>
           {% else %}—{% endif %}
         </td>
         {% if tipo == 'excel' %}
