@@ -141,7 +141,7 @@ def gerar_excel_lote_items(lote_ids):
         ('Base Legal',           38),
         ('CST Atual NF-e',       14),
         ('CST Sugerido',         14),
-        ('Regime PIS/COFINS',    42),
+        ('Regime Tributário',     42),
         ('CFOP Sugerido',        14),
         ('Alíq. PIS (%)',        13),
         ('Alíq. COFINS (%)',     15),
@@ -169,7 +169,8 @@ def gerar_excel_lote_items(lote_ids):
         mono_str     = ('Sim' if c.monofasico else 'Não') if c else '—'
         incon_str    = ('Sim' if c.inconsistencia_detectada else 'Não') if c else '—'
         cst_sugerido = c.cst_sugerido or '' if c else ''
-        regime_desc  = CST_DESCRICAO.get(cst_sugerido, '') if cst_sugerido else ''
+        grupo_ok     = bool(c and c.grupo_tributario)
+        regime_desc  = CST_DESCRICAO.get(cst_sugerido, '') if (cst_sugerido and grupo_ok) else ''
 
         if erro:
             fmt = fmt_erro

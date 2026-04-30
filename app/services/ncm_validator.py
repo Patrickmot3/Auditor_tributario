@@ -140,11 +140,11 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
             'grupo': None,
             'tabela_sped': None,
             'lei': None,
-            'cst_sugerido': '07',
-            'cst_entrada': '70',
-            'cfop_sugerido': '5102',
-            'pis_aliquota': 0.65,
-            'cofins_aliquota': 3.00,
+            'cst_sugerido': None,
+            'cst_entrada': None,
+            'cfop_sugerido': None,
+            'pis_aliquota': None,
+            'cofins_aliquota': None,
             'posicao_cadeia': empresa.posicao_cadeia,
             'inconsistencia_detectada': False,
             'observacao': 'NCM não localizado nas tabelas SPED. Verificar manualmente.',
@@ -191,18 +191,18 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
     if empresa.regime_tributario == 'simples_nacional':
         if cst_sugerido in {'02', '03', '04'}:
             observacao += (
-                ' Simples Nacional: produto monofásico — a receita pode ser segregada '
-                'e excluída da base de cálculo do DAS (LC 123/2006, art. 18, § 4º-A).'
+                ' Simples Nacional: receita pode ser segregada e excluída da base do DAS '
+                '(tributação monofásica — LC 123/2006, art. 18, § 4º-A).'
             )
         elif cst_sugerido == '05':
             observacao += (
-                ' Simples Nacional: produto com Substituição Tributária — '
-                'a receita pode ser segregada e excluída da base de cálculo do DAS.'
+                ' Simples Nacional: receita pode ser segregada e excluída da base do DAS '
+                '(Substituição Tributária — LC 123/2006, art. 18, § 4º-A).'
             )
         elif cst_sugerido in {'06', '07', '08', '09'}:
             observacao += (
                 ' Atenção (Simples Nacional): este CST não permite exclusão do DAS — '
-                'o PIS/COFINS é pago embutido na alíquota do Anexo I normalmente '
+                'PIS/COFINS são pagos normalmente pela alíquota do Anexo I '
                 '(sem previsão na LC 123/2006 para segregação).'
             )
 
