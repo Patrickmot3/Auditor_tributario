@@ -355,19 +355,23 @@ def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
 
 
 # Capítulos TIPI válidos por código de tabela SPED (regime monofásico)
+# Nota: no banco de produção, "Bebidas Frias" está associada à tabela 4.3.15 (não 4.3.11)
+# pois o seed original usou essa numeração.  4.3.11 no banco = "Combustíveis e Derivados".
 _CAPITULOS_VALIDOS = {
     '4.3.10': {'40', '68', '70', '73', '83', '84', '85', '87', '90', '91', '94'},  # Autopeças
-    '4.3.11': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias (por unidade de medida)
     '4.3.13': {'30', '33', '34', '35', '38', '40', '48', '84', '85', '87', '89', '90'},  # Fármacos/Perfumaria
-    # 4.3.12, 4.3.14, 4.3.15, 4.3.16: abrangem múltiplos capítulos, sem restrição por capítulo
+    '4.3.15': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias — chave conforme banco
+    # 4.3.11, 4.3.12, 4.3.14, 4.3.16: abrangem múltiplos capítulos, sem restrição por capítulo
 }
 
 # Posições TIPI (4 dígitos) excluídas por tabela — mais específico que _CAPITULOS_VALIDOS.
 # Necessário quando o capítulo é válido mas certas posições NÃO pertencem ao regime.
 _POSICOES_EXCLUIDAS = {
-    # 2207 = Álcool etílico / Etanol: capítulo 22 está em Bebidas Frias, mas 2207 é combustível
-    # (Lei 9.718/98) — não bebida fria (Lei 13.097/2015 cobre 2201, 2202, 2203, 2206, 2208)
-    '4.3.11': {'2207', '2209'},  # Etanol e vinagres fora da lista de Bebidas Frias
+    # 2207 = Álcool etílico / Etanol: capítulo 22 está na lista de Bebidas Frias, mas
+    # 2207 é combustível (Lei 9.718/98) — não bebida fria.
+    # 2209 = Vinagres: também capítulo 22 mas não sujeito ao regime de Bebidas Frias.
+    # Chave '4.3.15' conforme tabela grupos_tributarios do banco de produção.
+    '4.3.15': {'2207', '2209'},
 }
 
 # Faixa de anos que não são NCMs válidos (ex-anos extraídos de notas de rodapé)
