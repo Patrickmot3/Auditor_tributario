@@ -34,7 +34,13 @@
           </div>
 
           <div class="mb-3">
-            <label class="form-label">CST atual praticado <small class="text-muted">(opcional — para detectar inconsistência)</small></label>
+            <label class="form-label fw-semibold d-flex align-items-center gap-1">
+              CST da nota fiscal
+              <span class="text-muted fw-normal">(opcional)</span>
+              <i class="bi bi-question-circle text-muted"
+                 data-bs-toggle="tooltip"
+                 title="Informe o CST utilizado na NF-e para detectar se diverge do CST correto sugerido pelo sistema."></i>
+            </label>
             <input type="text" name="cst_atual" class="form-control font-monospace"
                    placeholder="Ex: 04, 07, 70" maxlength="3">
           </div>
@@ -51,10 +57,180 @@
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Consulta em lote manual -->
+  <!-- Resultado -->
+  <div class="col-lg-7">
+    {% if resultado %}
+      {% if resultado.get('erro') %}
+        <div class="alert alert-danger"><i class="bi bi-x-circle"></i> {{ resultado.erro }}</div>
+      {% else %}
+        {% set cst = resultado.cst_sugerido %}
+        {% set card_class = 'card-resultado-inconsistencia' if resultado.inconsistencia_detectada else ('card-resultado-sim' if resultado.monofasico else 'card-resultado-nao') %}
+        <div class="card {{ card_class }} mb-3" id="resultado-card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold font-monospace fs-5">NCM {{ resultado.ncm }}</span>
+            <div class="d-flex gap-2 align-items-center">
+              {% if cst in ('02', '03', '04') %}
+                <span class="badge badge-mono-sim fs-6">MONOFÁSICO</span>
+              {% elif cst == '05' %}
+                <span class="badge bg-primary fs-6">ST</span>
+              {% elif cst == '06' %}
+                <span class="badge bg-info text-dark fs-6">ALÍQ. ZERO</span>
+              {% elif cst == '07' %}
+                <span class="badge bg-secondary fs-6">ISENTO</span>
+              {% elif cst == '08' %}
+                <span class="badge bg-secondary fs-6">SEM INCIDÊNCIA</span>
+              {% elif cst == '09' %}
+                <span class="badge bg-secondary fs-6">SUSPENSÃO</span>
+              {% elif not resultado.grupo %}
+                <span class="badge bg-secondary fs-6">NCM NÃO LOCALIZADO</span>
+              {% else %}
+                <span class="badge badge-mono-nao fs-6">NÃO MONOFÁSICO</span>
+              {% endif %}
+              {% if resultado.inconsistencia_detectada %}
+                <span class="badge badge-inconsistencia fs-6"><i class="bi bi-exclamation-triangle"></i> INCONSISTÊNCIA</span>
+              {% endif %}
+              <button class="btn btn-sm btn-outline-secondary" id="btn-copiar"
+                      data-bs-toggle="tooltip" title="Copiar resultado">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            {% if resultado.descricao_ncm %}
+              <p class="text-muted mb-3 small">{{ resultado.descricao_ncm }}</p>
+            {% endif %}
+
+            <!-- Bloco 1: Classificação -->
+            <div class="mb-3">
+              <div class="text-muted small text-uppercase fw-semibold mb-2" style="letter-spacing:.05em;">Classificação</div>
+              <div class="row g-2">
+                <div class="col-sm-6">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Grupo Tributário</div>
+                    <div class="fw-semibold">{{ resultado.grupo or '—' }}</div>
+                  </div>
+                </div>
+                <div class="col-sm-6">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Tabela SPED</div>
+                    <div class="fw-semibold">{{ resultado.tabela_sped or '—' }}</div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Regime de Tributação PIS/COFINS</div>
+                    <div class="fw-semibold">{{ resultado.descricao_tributacao or '—' }}</div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Base Legal</div>
+                    <div class="fw-semibold small">{{ resultado.lei or '—' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 2: Códigos Fiscais -->
+            <div class="mb-3">
+              <div class="text-muted small text-uppercase fw-semibold mb-2" style="letter-spacing:.05em;">Códigos Fiscais</div>
+              <div class="row g-2">
+                <div class="col-sm-4">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">CST Sugerido</div>
+                    <div class="fw-bold text-primary font-monospace fs-5">{{ resultado.cst_sugerido or '—' }}</div>
+                  </div>
+                </div>
+                <div class="col-sm-4">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">CFOP Sugerido</div>
+                    <div class="fw-bold font-monospace fs-5">{{ resultado.cfop_sugerido or '—' }}</div>
+                  </div>
+                </div>
+                <div class="col-sm-4">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Posição na Cadeia</div>
+                    <div class="fw-semibold">{{ resultado.posicao_cadeia | title if resultado.posicao_cadeia else '—' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 3: Alíquotas -->
+            <div class="mb-3">
+              <div class="text-muted small text-uppercase fw-semibold mb-2" style="letter-spacing:.05em;">Alíquotas</div>
+              <div class="row g-2">
+                <div class="col-sm-6">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Alíquota PIS</div>
+                    <div class="fw-bold">
+                      {% if resultado.pis_aliquota is not none %}
+                        {{ "%.4f"|format(resultado.pis_aliquota|float) }}%
+                      {% else %}—{% endif %}
+                    </div>
+                  </div>
+                </div>
+                <div class="col-sm-6">
+                  <div class="p-2 rounded bg-body-secondary">
+                    <div class="text-muted small">Alíquota COFINS</div>
+                    <div class="fw-bold">
+                      {% if resultado.cofins_aliquota is not none %}
+                        {{ "%.4f"|format(resultado.cofins_aliquota|float) }}%
+                      {% else %}—{% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% if resultado.monofasico and resultado.pis_aliquota is not none and resultado.pis_aliquota|float == 0.0 %}
+              <div class="mt-2 text-muted small">
+                <i class="bi bi-info-circle"></i> Alíquota zero na revenda — tributo já recolhido pelo fabricante/importador na origem.
+              </div>
+              {% endif %}
+            </div>
+
+            <!-- Bloco 4: Alertas -->
+            {% if resultado.inconsistencia_detectada or resultado.observacao %}
+            <div class="mb-3">
+              <div class="text-muted small text-uppercase fw-semibold mb-2" style="letter-spacing:.05em;">Alertas</div>
+              {% if resultado.inconsistencia_detectada %}
+              <div class="alert alert-warning py-2 mb-2">
+                <i class="bi bi-exclamation-triangle"></i> CST informado diverge do CST correto sugerido pelo sistema.
+              </div>
+              {% endif %}
+              {% if resultado.observacao %}
+              <div class="alert alert-warning py-2 mb-0">
+                <i class="bi bi-info-circle"></i> {{ resultado.observacao }}
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            {% if resultado.ultima_atualizacao_tabela %}
+            <div class="text-muted small">
+              <i class="bi bi-clock"></i> Tabela SPED atualizada em: <strong>{{ resultado.ultima_atualizacao_tabela }}</strong>
+              {% if resultado.versao_tabela %} (Versão {{ resultado.versao_tabela }}){% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="text-center text-muted mt-5 pt-5">
+        <i class="bi bi-search" style="font-size: 4rem; opacity: .3;"></i>
+        <p class="mt-3">Informe um NCM para consultar a tributação</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Consulta em Lote Manual -->
+<hr class="my-4 border-secondary">
+<div class="row">
+  <div class="col-lg-5">
     <div class="card">
-      <div class="card-header"><i class="bi bi-list-ul"></i> Consulta em Lote (manual)</div>
+      <div class="card-header text-muted small"><i class="bi bi-list-ul"></i> Consulta em Lote (manual)</div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('consulta.lote_manual') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -77,110 +253,35 @@
       </div>
     </div>
   </div>
-
-  <!-- Resultado -->
-  <div class="col-lg-7">
-    {% if resultado %}
-      {% if resultado.get('erro') %}
-        <div class="alert alert-danger"><i class="bi bi-x-circle"></i> {{ resultado.erro }}</div>
-      {% else %}
-        {% set card_class = 'card-resultado-inconsistencia' if resultado.inconsistencia_detectada else ('card-resultado-sim' if resultado.monofasico else 'card-resultado-nao') %}
-        <div class="card {{ card_class }} mb-3">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-bold font-monospace fs-5">NCM {{ resultado.ncm }}</span>
-            <div class="d-flex gap-2">
-              {% if resultado.monofasico %}
-                <span class="badge badge-mono-sim fs-6">MONOFÁSICO</span>
-              {% else %}
-                <span class="badge badge-mono-nao fs-6">NÃO MONOFÁSICO</span>
-              {% endif %}
-              {% if resultado.inconsistencia_detectada %}
-                <span class="badge badge-inconsistencia fs-6"><i class="bi bi-exclamation-triangle"></i> INCONSISTÊNCIA</span>
-              {% endif %}
-            </div>
-          </div>
-          <div class="card-body">
-            {% if resultado.descricao_ncm %}
-              <p class="text-muted mb-3">{{ resultado.descricao_ncm }}</p>
-            {% endif %}
-            <div class="row g-3">
-              <div class="col-sm-6">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Grupo Tributário</div>
-                  <div class="fw-semibold">{{ resultado.grupo or '—' }}</div>
-                </div>
-              </div>
-              <div class="col-sm-6">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Tabela SPED</div>
-                  <div class="fw-semibold">{{ resultado.tabela_sped or '—' }}</div>
-                </div>
-              </div>
-              <div class="col-sm-12">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Regime de Tributação PIS/COFINS</div>
-                  <div class="fw-semibold">{{ resultado.descricao_tributacao or '—' }}</div>
-                </div>
-              </div>
-              <div class="col-sm-12">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Base Legal</div>
-                  <div class="fw-semibold">{{ resultado.lei or '—' }}</div>
-                </div>
-              </div>
-              <div class="col-sm-4">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">CST Sugerido</div>
-                  <div class="fw-bold text-primary font-monospace fs-5">{{ resultado.cst_sugerido }}</div>
-                </div>
-              </div>
-              <div class="col-sm-4">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">CFOP Sugerido</div>
-                  <div class="fw-bold font-monospace fs-5">{{ resultado.cfop_sugerido or '—' }}</div>
-                </div>
-              </div>
-              <div class="col-sm-4">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Posição na Cadeia</div>
-                  <div class="fw-semibold">{{ resultado.posicao_cadeia | title }}</div>
-                </div>
-              </div>
-              <div class="col-sm-6">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Alíquota PIS</div>
-                  <div class="fw-bold">{{ "%.4f"|format(resultado.pis_aliquota) }}%</div>
-                </div>
-              </div>
-              <div class="col-sm-6">
-                <div class="p-3 rounded bg-body-secondary">
-                  <div class="text-muted small">Alíquota COFINS</div>
-                  <div class="fw-bold">{{ "%.4f"|format(resultado.cofins_aliquota) }}%</div>
-                </div>
-              </div>
-              {% if resultado.observacao %}
-              <div class="col-12">
-                <div class="alert alert-warning mb-0">
-                  <i class="bi bi-info-circle"></i> {{ resultado.observacao }}
-                </div>
-              </div>
-              {% endif %}
-            </div>
-            {% if resultado.ultima_atualizacao_tabela %}
-            <div class="mt-3 text-muted small">
-              <i class="bi bi-clock"></i> Tabela SPED atualizada em: <strong>{{ resultado.ultima_atualizacao_tabela }}</strong>
-              {% if resultado.versao_tabela %} (Versão {{ resultado.versao_tabela }}){% endif %}
-            </div>
-            {% endif %}
-          </div>
-        </div>
-      {% endif %}
-    {% else %}
-      <div class="text-center text-muted mt-5 pt-5">
-        <i class="bi bi-search" style="font-size: 4rem; opacity: .3;"></i>
-        <p class="mt-3">Informe um NCM para consultar a tributação</p>
-      </div>
-    {% endif %}
-  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+  new bootstrap.Tooltip(el);
+});
+
+const btnCopiar = document.getElementById('btn-copiar');
+if (btnCopiar) {
+  btnCopiar.addEventListener('click', function () {
+    {% if resultado and not resultado.get('erro') %}
+    const linhas = [
+      'NCM: ' + {{ resultado.ncm | tojson }},
+      'Grupo: ' + {{ (resultado.grupo or '—') | tojson }},
+      'Tabela SPED: ' + {{ (resultado.tabela_sped or '—') | tojson }},
+      'Regime: ' + {{ (resultado.descricao_tributacao or '—') | tojson }},
+      'Base Legal: ' + {{ (resultado.lei or '—') | tojson }},
+      'CST Sugerido: ' + {{ (resultado.cst_sugerido or '—') | tojson }},
+      'CFOP Sugerido: ' + {{ (resultado.cfop_sugerido or '—') | tojson }},
+    ];
+    navigator.clipboard.writeText(linhas.join('\n')).then(() => {
+      const icon = this.querySelector('i');
+      icon.classList.replace('bi-clipboard', 'bi-clipboard-check');
+      setTimeout(() => icon.classList.replace('bi-clipboard-check', 'bi-clipboard'), 2000);
+    });
+    {% endif %}
+  });
+}
+</script>
 {% endblock %}

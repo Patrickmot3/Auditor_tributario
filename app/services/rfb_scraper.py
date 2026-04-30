@@ -362,6 +362,14 @@ _CAPITULOS_VALIDOS = {
     # 4.3.12, 4.3.14, 4.3.15, 4.3.16: abrangem múltiplos capítulos, sem restrição por capítulo
 }
 
+# Posições TIPI (4 dígitos) excluídas por tabela — mais específico que _CAPITULOS_VALIDOS.
+# Necessário quando o capítulo é válido mas certas posições NÃO pertencem ao regime.
+_POSICOES_EXCLUIDAS = {
+    # 2207 = Álcool etílico / Etanol: capítulo 22 está em Bebidas Frias, mas 2207 é combustível
+    # (Lei 9.718/98) — não bebida fria (Lei 13.097/2015 cobre 2201, 2202, 2203, 2206, 2208)
+    '4.3.11': {'2207', '2209'},  # Etanol e vinagres fora da lista de Bebidas Frias
+}
+
 # Faixa de anos que não são NCMs válidos (ex-anos extraídos de notas de rodapé)
 _ANO_MIN, _ANO_MAX = 1900, 2050
 
@@ -401,6 +409,14 @@ def _ncm_valido(ncm_raw: str, tabela_id: str) -> bool:
             logger.debug(f'NCM rejeitado (capítulo {capitulo} inválido para tabela {tabela_id}): {ncm_raw}')
             return False
 
+    # Rejeita posições TIPI explicitamente excluídas (mais específico que capítulo)
+    posicoes_excluidas = _POSICOES_EXCLUIDAS.get(tabela_id)
+    if posicoes_excluidas:
+        posicao = ncm_raw[:4]
+        if posicao in posicoes_excluidas:
+            logger.debug(f'NCM rejeitado (posição {posicao} excluída para tabela {tabela_id}): {ncm_raw}')
+            return False
+
     return True
 
 
@@ -408,6 +424,25 @@ def _ncm_valido(ncm_raw: str, tabela_id: str) -> bool:
 
 def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[int, int]:
     from app.models.base_tributaria import AliquotaGrupo
+
+    # Desativar NCMs já cadastrados neste grupo que pertencem a posições excluídas
+    # (podem ter sido importados antes da regra de exclusão existir)
+    posicoes_excluidas = _POSICOES_EXCLUIDAS.get(tabela_id)
+    if posicoes_excluidas:
+        registros_ativos = NcmTributario.query.filter_by(
+            grupo_tributario_id=grupo.id, ativo=True
+        ).all()
+        desativados = 0
+        for reg in registros_ativos:
+            if reg.ncm[:4] in posicoes_excluidas:
+                reg.ativo = False
+                reg.updated_at = datetime.now(timezone.utc)
+                desativados += 1
+        if desativados:
+            logger.info(
+                f'Tabela {tabela_id}: {desativados} NCM(s) desativados '
+                f'(posições excluídas: {posicoes_excluidas})'
+            )
 
     # Busca alíquota vigente no banco; usa fallback hardcoded apenas se não houver
     aliquota = AliquotaGrupo.vigente_para(grupo.id)
