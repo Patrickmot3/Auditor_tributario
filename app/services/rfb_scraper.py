@@ -17,26 +17,48 @@ from app.models.base_tributaria import LogAtualizacao
 logger = logging.getLogger(__name__)
 
 TABELAS_SPED = {
-    # 4.3.10 — Veículos e Autopeças (Lei 10.485/2002)
+    # 4.3.10 — Monofásicos: Alíquotas Diferenciadas / Bebidas Frias (CST 02/04)
     '4.3.10': {
         'url_download': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1638',
-        'nome': 'Veículos e Autopeças',
+        'nome': 'Monofásicos — Alíquotas Diferenciadas (CST 02/04)',
     },
-    # 4.3.13 — Fármacos e Perfumaria (Lei 10.147/2000)
+    # 4.3.11 — Monofásicos: Alíquotas por Unidade de Medida / Bebidas Frias (CST 03/04)
+    '4.3.11': {
+        'url_download': 'http://sped.rfb.gov.br/arquivo/download/5786',
+        'url_show': 'http://sped.rfb.gov.br/arquivo/show/5786',
+        'nome': 'Monofásicos por Unidade de Medida (CST 03/04)',
+    },
+    # 4.3.12 — Substituição Tributária (CST 05)
+    '4.3.12': {
+        'url_download': 'http://sped.rfb.gov.br/arquivo/download/1642',
+        'url_show': 'http://sped.rfb.gov.br/arquivo/show/1642',
+        'nome': 'Substituição Tributária (CST 05)',
+    },
+    # 4.3.13 — Fármacos e Perfumaria / Alíquota Zero (CST 06)
     '4.3.13': {
         'url_download': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1643',
-        'nome': 'Fármacos e Perfumaria',
+        'nome': 'Alíquota Zero — Fármacos e Perfumaria (CST 06)',
     },
-    # 4.3.15 — Bebidas Frias (Lei 13.097/2015) — arquivo ID 5786 no SPED
+    # 4.3.14 — Isenção PIS/COFINS (CST 07)
+    '4.3.14': {
+        'url_download': 'http://sped.rfb.gov.br/arquivo/download/1646',
+        'url_show': 'http://sped.rfb.gov.br/arquivo/show/1646',
+        'nome': 'Isenção PIS/COFINS (CST 07)',
+    },
+    # 4.3.15 — Sem Incidência (CST 08)
     '4.3.15': {
-        'url_download': 'http://sped.rfb.gov.br/arquivo/download/5786',
-        'url_show': 'http://sped.rfb.gov.br/arquivo/show/5786',
-        'nome': 'Bebidas Frias',
+        'url_download': 'http://sped.rfb.gov.br/arquivo/download/1651',
+        'url_show': 'http://sped.rfb.gov.br/arquivo/show/1651',
+        'nome': 'Sem Incidência (CST 08)',
     },
-    # Nota: Combustíveis (Lei 9.718/98) não possui tabela SPED para download;
-    # NCMs são mantidos via seed e atualizados manualmente quando a lei mudar.
+    # 4.3.16 — Suspensão PIS/COFINS (CST 09)
+    '4.3.16': {
+        'url_download': 'http://sped.rfb.gov.br/arquivo/download/1655',
+        'url_show': 'http://sped.rfb.gov.br/arquivo/show/1655',
+        'nome': 'Suspensão PIS/COFINS (CST 09)',
+    },
 }
 
 HEADERS = {
@@ -335,8 +357,9 @@ def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
 # Capítulos TIPI válidos por código de tabela SPED (regime monofásico)
 _CAPITULOS_VALIDOS = {
     '4.3.10': {'40', '68', '70', '73', '83', '84', '85', '87', '90', '91', '94'},  # Autopeças
+    '4.3.11': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias (por unidade de medida)
     '4.3.13': {'30', '33', '34', '35', '38', '40', '48', '84', '85', '87', '89', '90'},  # Fármacos/Perfumaria
-    '4.3.15': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias + embalagens
+    # 4.3.12, 4.3.14, 4.3.15, 4.3.16: abrangem múltiplos capítulos, sem restrição por capítulo
 }
 
 # Faixa de anos que não são NCMs válidos (ex-anos extraídos de notas de rodapé)

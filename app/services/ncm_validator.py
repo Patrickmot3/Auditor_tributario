@@ -184,6 +184,28 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
                 '(Solução de Consulta COSIT nº 55/2018).'
             )
 
+    # Regra Simples Nacional x exclusão do DAS:
+    # Monofásico (CST 02/03/04) e ST (CST 05) permitem segregar a receita da base do DAS.
+    # Isenção (CST 07) e Alíquota Zero (CST 06) NÃO excluem do DAS — o optante paga
+    # PIS/COFINS embutido na alíquota do Anexo I normalmente (LC 123/2006, art. 18, § 4º-A).
+    if empresa.regime_tributario == 'simples_nacional':
+        if cst_sugerido in {'02', '03', '04'}:
+            observacao += (
+                ' Simples Nacional: produto monofásico — a receita pode ser segregada '
+                'e excluída da base de cálculo do DAS (LC 123/2006, art. 18, § 4º-A).'
+            )
+        elif cst_sugerido == '05':
+            observacao += (
+                ' Simples Nacional: produto com Substituição Tributária — '
+                'a receita pode ser segregada e excluída da base de cálculo do DAS.'
+            )
+        elif cst_sugerido in {'06', '07', '08', '09'}:
+            observacao += (
+                ' Atenção (Simples Nacional): este CST não permite exclusão do DAS — '
+                'o PIS/COFINS é pago embutido na alíquota do Anexo I normalmente '
+                '(sem previsão na LC 123/2006 para segregação).'
+            )
+
     # Detectar inconsistência: CST da NF-e difere do CST que o sistema sugere
     inconsistencia = False
     if cst_atual and cst_sugerido and cst_atual.strip() != cst_sugerido.strip():
