@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa
 from app.models.consulta import Consulta, LoteConsulta
-from app.services.ncm_validator import validar_ncm, _normalizar_ncm, CST_DESCRICAO
+from app.services.ncm_validator import validar_ncm, _normalizar_ncm, CST_DESCRICAO, derivar_cfop
 
 
 def _checar_acesso_empresa(empresa_id):
@@ -38,11 +38,17 @@ def _empresa_selecionada():
 def individual():
     empresa = _empresa_selecionada()
     resultado = None
+    destino  = 'interna'
+    tem_st   = False
+    natureza = 'revendedor'
 
     if request.method == 'POST':
-        ncm = request.form.get('ncm', '').strip()
+        ncm       = request.form.get('ncm', '').strip()
         cst_atual = request.form.get('cst_atual', '').strip() or None
         empresa_id = request.form.get('empresa_id', type=int)
+        destino   = request.form.get('destino', 'interna')
+        tem_st    = request.form.get('icms_st') == 'com_st'
+        natureza  = request.form.get('natureza', 'revendedor')
 
         if not empresa_id:
             flash('Selecione uma empresa antes de consultar.', 'warning')
@@ -52,17 +58,26 @@ def individual():
             session['empresa_id'] = empresa_id
             empresa = db.session.get(Empresa, empresa_id)
             resultado = validar_ncm(ncm, empresa_id, cst_atual)
+            if resultado and 'erro' not in resultado:
+                resultado['cfop_sugerido'] = derivar_cfop(
+                    resultado.get('grupo'), destino, tem_st
+                )
 
     empresas = current_user.empresas if not current_user.is_admin else Empresa.query.filter_by(ativo=True).all()
     return render_template('consulta/individual.html',
-                           empresa=empresa, resultado=resultado, empresas=empresas)
+                           empresa=empresa, resultado=resultado, empresas=empresas,
+                           destino=destino, tem_st=tem_st, natureza=natureza)
 
 
 @consulta_bp.route('/lote/manual', methods=['POST'])
 @login_required
 def lote_manual():
     empresa_id = request.form.get('empresa_id', type=int)
-    ncms_raw = request.form.get('ncms', '')
+    ncms_raw   = request.form.get('ncms', '')
+    destino    = request.form.get('destino', 'interna')
+    tem_st     = request.form.get('icms_st') == 'com_st'
+    natureza   = request.form.get('natureza', 'revendedor')
+
     if not empresa_id or not ncms_raw:
         flash('Informe a empresa e a lista de NCMs.', 'warning')
         return redirect(url_for('consulta.individual'))
@@ -75,13 +90,16 @@ def lote_manual():
     for ncm in ncms:
         res = validar_ncm(ncm, empresa_id)
         res['ncm_formatado'] = ncm
+        if 'erro' not in res:
+            res['cfop_sugerido'] = derivar_cfop(res.get('grupo'), destino, tem_st)
         resultados.append(res)
 
-    empresa = db.session.get(Empresa, empresa_id)
+    empresa  = db.session.get(Empresa, empresa_id)
     empresas = current_user.empresas if not current_user.is_admin else Empresa.query.filter_by(ativo=True).all()
     return render_template('consulta/lote_resultado.html',
                            empresa=empresa, resultados=resultados, empresas=empresas,
-                           cst_descricao=CST_DESCRICAO)
+                           cst_descricao=CST_DESCRICAO,
+                           destino=destino, tem_st=tem_st, natureza=natureza)
 
 
 @consulta_bp.route('/lote/excel/modelo')

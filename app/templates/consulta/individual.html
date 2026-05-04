@@ -45,6 +45,48 @@
                    placeholder="Ex: 04, 07, 70" maxlength="3">
           </div>
 
+          <hr class="my-3">
+          <div class="text-muted small text-uppercase fw-semibold mb-2" style="letter-spacing:.05em;">
+            <i class="bi bi-signpost-split"></i> Parâmetros CFOP
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1">Destino da operação</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="destino" id="destino_interna" value="interna"
+                     {% if destino == 'interna' %}checked{% endif %}>
+              <label class="btn btn-sm btn-outline-secondary" for="destino_interna">
+                <i class="bi bi-house"></i> Interna (5xxx)
+              </label>
+              <input type="radio" class="btn-check" name="destino" id="destino_inter" value="interestadual"
+                     {% if destino == 'interestadual' %}checked{% endif %}>
+              <label class="btn btn-sm btn-outline-secondary" for="destino_inter">
+                <i class="bi bi-signpost-split"></i> Interestadual (6xxx)
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1">ICMS-ST</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="icms_st" id="st_sem" value="sem_st"
+                     {% if not tem_st %}checked{% endif %}>
+              <label class="btn btn-sm btn-outline-secondary" for="st_sem">Sem ST</label>
+              <input type="radio" class="btn-check" name="icms_st" id="st_com" value="com_st"
+                     {% if tem_st %}checked{% endif %}>
+              <label class="btn btn-sm btn-outline-secondary" for="st_com">Com ST retido</label>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1">Natureza do comprador</label>
+            <select name="natureza" class="form-select form-select-sm">
+              <option value="revendedor" {% if natureza == 'revendedor' %}selected{% endif %}>Revendedor (PJ)</option>
+              <option value="consumidor_final" {% if natureza == 'consumidor_final' %}selected{% endif %}>Consumidor final</option>
+              <option value="produtor_rural" {% if natureza == 'produtor_rural' %}selected{% endif %}>Produtor rural</option>
+            </select>
+          </div>
+
           <button type="submit" class="btn btn-primary w-100">
             <i class="bi bi-search"></i> Consultar
           </button>
@@ -147,6 +189,12 @@
                   <div class="p-2 rounded bg-body-secondary">
                     <div class="text-muted small">CFOP Sugerido</div>
                     <div class="fw-bold font-monospace fs-5">{{ resultado.cfop_sugerido or '—' }}</div>
+                    {% if resultado.cfop_sugerido %}
+                    <div class="text-muted" style="font-size:.7rem; line-height:1.2;">
+                      {{ 'Interna' if destino == 'interna' else 'Interestadual' }} ·
+                      {{ 'Com ST' if tem_st else 'Sem ST' }}
+                    </div>
+                    {% endif %}
                   </div>
                 </div>
                 <div class="col-sm-4">
@@ -246,6 +294,30 @@
             <textarea name="ncms" class="form-control form-control-sm font-monospace"
                       rows="5" placeholder="Cole os NCMs, um por linha ou separados por vírgula:&#10;87084090&#10;27101259&#10;30030000"></textarea>
           </div>
+          <div class="row g-1 mb-2">
+            <div class="col-4">
+              <label class="form-label form-label-sm small mb-1 text-muted">Destino</label>
+              <select name="destino" class="form-select form-select-sm">
+                <option value="interna">Interna (5xxx)</option>
+                <option value="interestadual">Interestadual (6xxx)</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label form-label-sm small mb-1 text-muted">ICMS-ST</label>
+              <select name="icms_st" class="form-select form-select-sm">
+                <option value="sem_st">Sem ST</option>
+                <option value="com_st">Com ST retido</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label form-label-sm small mb-1 text-muted">Comprador</label>
+              <select name="natureza" class="form-select form-select-sm">
+                <option value="revendedor">Revendedor (PJ)</option>
+                <option value="consumidor_final">Cons. final</option>
+                <option value="produtor_rural">Prod. rural</option>
+              </select>
+            </div>
+          </div>
           <button type="submit" class="btn btn-sm btn-outline-primary w-100">
             <i class="bi bi-play"></i> Validar lote
           </button>
@@ -273,7 +345,10 @@ if (btnCopiar) {
       'Regime: ' + {{ (resultado.descricao_tributacao or '—') | tojson }},
       'Base Legal: ' + {{ (resultado.lei or '—') | tojson }},
       'CST Sugerido: ' + {{ (resultado.cst_sugerido or '—') | tojson }},
-      'CFOP Sugerido: ' + {{ (resultado.cfop_sugerido or '—') | tojson }},
+      'CFOP Sugerido: ' + {{ (resultado.cfop_sugerido or '—') | tojson }}
+        + ' ({{ 'Interna' if destino == 'interna' else 'Interestadual' }}'
+        + ' · {{ 'Com ST' if tem_st else 'Sem ST' }}'
+        + ' · {{ {'revendedor': 'Revendedor (PJ)', 'consumidor_final': 'Consumidor final', 'produtor_rural': 'Produtor rural'}.get(natureza, natureza) }})',
     ];
     navigator.clipboard.writeText(linhas.join('\n')).then(() => {
       const icon = this.querySelector('i');

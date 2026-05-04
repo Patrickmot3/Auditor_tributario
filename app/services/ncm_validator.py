@@ -33,6 +33,20 @@ CST_DESCRICAO = {
     '99': 'Outras Operações',
 }
 
+def derivar_cfop(grupo_nome: str | None, destino: str, tem_st: bool) -> str:
+    """
+    Deriva o CFOP de saída conforme Ajuste SINIEF 07/2001.
+    destino : 'interna' | 'interestadual'
+    tem_st  : True quando há ICMS-ST retido na operação
+    """
+    prefixo = '5' if destino == 'interna' else '6'
+    if grupo_nome and 'combust' in grupo_nome.lower():
+        return f'{prefixo}656'
+    if tem_st:
+        return '5405' if destino == 'interna' else '6404'
+    return f'{prefixo}102'
+
+
 # CNAEs automotivos (Lei 10.485/2002 — regra de destinação)
 CNAES_AUTOMOTIVOS = {
     '4511', '4512', '4520', '4541', '4542',

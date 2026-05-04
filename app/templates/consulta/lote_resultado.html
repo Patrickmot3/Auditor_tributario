@@ -15,8 +15,25 @@
 </div>
 
 {% if empresa %}
-<p class="text-muted small mb-3">Empresa: <strong>{{ empresa.razao_social }}</strong></p>
+<p class="text-muted small mb-2">Empresa: <strong>{{ empresa.razao_social }}</strong></p>
 {% endif %}
+
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+  <span class="badge bg-secondary">
+    <i class="bi bi-geo-alt"></i>
+    {{ 'Operação Interna (5xxx)' if destino == 'interna' else 'Operação Interestadual (6xxx)' }}
+  </span>
+  <span class="badge {{ 'bg-warning text-dark' if tem_st else 'bg-secondary' }}">
+    <i class="bi bi-shield{{ '-check' if tem_st else '' }}"></i>
+    {{ 'Com ST retido' if tem_st else 'Sem ST' }}
+  </span>
+  <span class="badge bg-secondary">
+    <i class="bi bi-person"></i>
+    {% if natureza == 'consumidor_final' %}Consumidor final
+    {% elif natureza == 'produtor_rural' %}Produtor rural
+    {% else %}Revendedor (PJ){% endif %}
+  </span>
+</div>
 
 <!-- Resumo -->
 <div class="row g-3 mb-4">
@@ -55,7 +72,7 @@
         <th>Grupo</th>
         <th>CST Sugerido</th>
         <th>Regime PIS/COFINS</th>
-        <th>CFOP</th>
+        <th>CFOP <small class="text-muted fw-normal">(derivado)</small></th>
         <th>Alíq. PIS</th>
         <th>Alíq. COFINS</th>
         <th>Inconsistência</th>
