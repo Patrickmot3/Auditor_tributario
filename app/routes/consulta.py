@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa
 from app.models.consulta import Consulta, LoteConsulta
-from app.services.ncm_validator import validar_ncm, _normalizar_ncm
+from app.services.ncm_validator import validar_ncm, _normalizar_ncm, CST_DESCRICAO
 
 
 def _checar_acesso_empresa(empresa_id):
@@ -80,7 +80,8 @@ def lote_manual():
     empresa = db.session.get(Empresa, empresa_id)
     empresas = current_user.empresas if not current_user.is_admin else Empresa.query.filter_by(ativo=True).all()
     return render_template('consulta/lote_resultado.html',
-                           empresa=empresa, resultados=resultados, empresas=empresas)
+                           empresa=empresa, resultados=resultados, empresas=empresas,
+                           cst_descricao=CST_DESCRICAO)
 
 
 @consulta_bp.route('/lote/excel/modelo')

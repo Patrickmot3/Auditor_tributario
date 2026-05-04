@@ -92,11 +92,14 @@ COMBUSTIVEIS = [
     ('27101922', 'Óleo diesel marítimo'),
     ('27101500', 'Querosene'),
     ('27101100', 'Gasolina de aviação'),
+    # Etanol combustível — Lei 9.718/1998, art. 5°
+    ('22071090', 'Álcool etílico não desnaturado — etanol hidratado combustível (EHC)'),
+    ('22072000', 'Álcool etílico desnaturado — etanol anidro combustível (EAC)'),
 ]
 
 FARMACOS_PREFIXOS = ['3003', '3004', '3303', '3304', '3305', '3306', '3307', '3401']
 
-BEBIDAS_PREFIXOS = ['2201', '2202', '2203', '2204', '2205', '2206', '2207', '2208']
+BEBIDAS_PREFIXOS = ['2201', '2202', '2203', '2204', '2205', '2206', '2208']
 
 PNEUMATICOS_POSICOES = ['4011', '4013']
 
@@ -210,7 +213,9 @@ def register_commands(app):
             ok = _criar_ncm(
                 ncm, desc, g_comb, 'ncm_exato',
                 'Lei nº 9.718/1998', 5.08, 23.44, 0.0, 0.0,
-                cst_entrada='04', cst_saida='04',
+                cst_entrada='02', cst_saida='04',
+                vigencia=date(1998, 1, 1),
+                fonte='https://www.planalto.gov.br/ccivil_03/leis/L9718compilado.htm',
             )
             if ok:
                 inseridos += 1
@@ -384,6 +389,55 @@ def register_commands(app):
 
         click.echo(f'\nSeed concluído! Total de NCMs/posições inseridos: {inseridos}')
         click.echo('Login admin: admin@tribsync.com.br | Senha: TribSync@2026!')
+
+    @app.cli.command('corrigir-etanol')
+    def corrigir_etanol():
+        """Migração: desativa 2207 em Bebidas Frias e insere etanol em Combustíveis."""
+        g_beb = GrupoTributario.query.filter_by(codigo='G400').first()
+        if g_beb:
+            registros_beb = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == g_beb.id,
+                NcmTributario.ncm.like('2207%'),
+                NcmTributario.ativo == True,
+            ).all()
+            for r in registros_beb:
+                r.ativo = False
+                r.updated_at = datetime.now(timezone.utc)
+            if registros_beb:
+                click.echo(f'  Desativados {len(registros_beb)} NCM(s) 2207* em Bebidas Frias.')
+
+        g_comb = GrupoTributario.query.filter_by(codigo='G200').first()
+        if not g_comb:
+            click.echo('Grupo G200 (Combustíveis) não encontrado. Execute seed-db primeiro.')
+            return
+
+        etanol = [
+            ('22071090', 'Álcool etílico não desnaturado — etanol hidratado combustível (EHC)'),
+            ('22072000', 'Álcool etílico desnaturado — etanol anidro combustível (EAC)'),
+        ]
+        inseridos = 0
+        for ncm, desc in etanol:
+            existente = NcmTributario.query.filter_by(
+                ncm=ncm, grupo_tributario_id=g_comb.id
+            ).first()
+            if existente:
+                existente.ativo = True
+                existente.updated_at = datetime.now(timezone.utc)
+                click.echo(f'  Reativado: {ncm}')
+            else:
+                ok = _criar_ncm(
+                    ncm, desc, g_comb.id, 'ncm_exato',
+                    'Lei nº 9.718/1998', 5.08, 23.44, 0.0, 0.0,
+                    cst_entrada='02', cst_saida='04',
+                    vigencia=date(1998, 1, 1),
+                    fonte='https://www.planalto.gov.br/ccivil_03/leis/L9718compilado.htm',
+                )
+                if ok:
+                    inseridos += 1
+                    click.echo(f'  Inserido: {ncm} — {desc}')
+
+        db.session.commit()
+        click.echo(f'Correção concluída: {inseridos} NCM(s) inseridos em Combustíveis.')
 
     @app.cli.command('criar-usuario')
     @click.argument('email')
