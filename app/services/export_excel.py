@@ -131,10 +131,12 @@ def gerar_excel_lote_items(lote_ids):
     colunas = [
         ('Empresa',              28),
         ('N° Documento NF-e',    20),
+        ('Data NF',              12),
         ('Linha',                 7),
         ('NCM',                  12),
         ('Descrição do Produto', 40),
         ('Código Produto',       15),
+        ('Valor do Item (R$)',   18),
         ('Cód. CEST',            12),
         ('Exceção PIS/COFINS',   18),
         ('Grupo Tributário',     25),
@@ -182,13 +184,18 @@ def gerar_excel_lote_items(lote_ids):
         else:
             fmt = fmt_norm
 
+        data_nf_str = item.data_nf.strftime('%d/%m/%Y') if item.data_nf else ''
+        valor_str   = float(item.valor_item) if item.valor_item is not None else ''
+
         linha = [
             empresa_nome,
             doc_nfe,
+            data_nf_str,
             item.linha_original or '',
             item.ncm or '',
             item.descricao or '',
             item.codigo_produto or '',
+            valor_str,
             item.codigo_cest or '',
             mono_str,
             (c.grupo_tributario or '') if c else '',
@@ -213,8 +220,44 @@ def gerar_excel_lote_items(lote_ids):
     return output
 
 
+def _extra_lote_info_por_consulta(consultas):
+    """
+    Retorna {consulta_id: {'data_nf': date, 'valor_item': Decimal}} do LoteItem
+    mais recente (maior id) que tenha data_nf preenchida.
+    """
+    from app.models.consulta import LoteItem
+    from app.extensions import db
+    from sqlalchemy import func
+
+    if not consultas:
+        return {}
+
+    ids = [c.id for c in consultas]
+
+    sub = (
+        db.session.query(
+            LoteItem.consulta_id,
+            func.max(LoteItem.id).label('max_item_id'),
+        )
+        .filter(LoteItem.consulta_id.in_(ids))
+        .filter(LoteItem.data_nf.isnot(None))
+        .group_by(LoteItem.consulta_id)
+        .subquery()
+    )
+
+    rows = (
+        db.session.query(sub.c.consulta_id, LoteItem.data_nf, LoteItem.valor_item)
+        .join(LoteItem, LoteItem.id == sub.c.max_item_id)
+        .all()
+    )
+
+    return {row.consulta_id: {'data_nf': row.data_nf, 'valor_item': row.valor_item}
+            for row in rows}
+
+
 def gerar_excel_consultas(consultas):
     numero_nfe_map = _numero_nfe_por_consulta(consultas)
+    extra_info_map = _extra_lote_info_por_consulta(consultas)
 
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -229,7 +272,8 @@ def gerar_excel_consultas(consultas):
     fmt_normal = workbook.add_format({'border': 1})
 
     colunas = [
-        'Empresa', 'CNPJ', 'N° Documento NF-e', 'NCM', 'Descrição do Produto',
+        'Empresa', 'CNPJ', 'N° Documento NF-e', 'Data NF', 'Valor do Item (R$)',
+        'NCM', 'Descrição do Produto',
         'Código Produto', 'Cód. CEST', 'Exceção PIS/COFINS', 'Grupo Tributário', 'Base Legal',
         'Tabela SPED', 'CST Sugerido Entrada', 'CST Sugerido Saída',
         'CFOP Sugerido', 'Alíquota PIS (%)', 'Alíquota COFINS (%)',
@@ -237,7 +281,7 @@ def gerar_excel_consultas(consultas):
         'Data da Consulta',
     ]
 
-    larguras = [30, 20, 18, 12, 40, 15, 12, 12, 25, 40, 12, 20, 20, 15, 15, 18, 18, 22, 50, 20]
+    larguras = [30, 20, 18, 12, 18, 12, 40, 15, 12, 12, 25, 40, 12, 20, 20, 15, 15, 18, 18, 22, 50, 20]
 
     for col_idx, (col, larg) in enumerate(zip(colunas, larguras)):
         ws.write(0, col_idx, col, fmt_cabecalho)
@@ -251,6 +295,9 @@ def gerar_excel_consultas(consultas):
         monofasico_str = 'Sim' if (c.monofasico or c.cst_sugerido == '05') else 'Não'
         inconsistencia_str = 'Sim' if c.inconsistencia_detectada else 'Não'
         numero_nfe = numero_nfe_map.get(c.id, '')
+        extra = extra_info_map.get(c.id, {})
+        data_nf_str = extra['data_nf'].strftime('%d/%m/%Y') if extra.get('data_nf') else ''
+        valor_item  = float(extra['valor_item']) if extra.get('valor_item') is not None else ''
 
         if c.inconsistencia_detectada:
             fmt = fmt_inconsistencia
@@ -263,6 +310,8 @@ def gerar_excel_consultas(consultas):
             empresa.razao_social if empresa else '',
             empresa.cnpj_formatado if empresa else '',
             numero_nfe,
+            data_nf_str,
+            valor_item,
             c.ncm_consultado or '',
             c.descricao_produto or '',
             c.codigo_produto or '',

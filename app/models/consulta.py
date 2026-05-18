@@ -71,6 +71,8 @@ class LoteItem(db.Model):
     descricao = db.Column(db.String(500))
     codigo_produto = db.Column(db.String(50))
     codigo_cest = db.Column(db.String(10))
+    data_nf = db.Column(db.Date, nullable=True)
+    valor_item = db.Column(db.Numeric(15, 2), nullable=True)
     status_processamento = db.Column(db.String(20), default='ok')  # ok, erro, duplicado
     mensagem_erro = db.Column(db.String(300))
 

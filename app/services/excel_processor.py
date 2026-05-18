@@ -21,6 +21,8 @@ COLUNAS_ESPERADAS = {
     'ncm':      ['cód. ncm', 'cod. ncm', 'ncm', 'cód ncm', 'código ncm'],
     'cest':     ['cód. cest', 'cod. cest', 'cest', 'cód cest'],
     'cst':      ['cst atual', 'cst', 'cst pis', 'cst cofins'],
+    'valor':    ['valor do item', 'valor item', 'valor unit', 'vl unit', 'valor unitário',
+                 'vl. unit', 'valor', 'vlr', 'v.unit', 'preco', 'preço'],
 }
 
 
@@ -85,6 +87,7 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
     col_cest     = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['cest'])
     col_nbm      = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['nbm'])
     col_cst      = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['cst'])
+    col_valor    = _detectar_coluna(df.columns, COLUNAS_ESPERADAS['valor'])
 
     if not col_ncm:
         return {'erro': 'Coluna NCM não encontrada na planilha.'}
@@ -127,6 +130,20 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
         if cst_atual and cst_atual.lower() in ('nan', 'none'):
             cst_atual = None
 
+        valor_item = None
+        if col_valor:
+            v_str = str(row.get(col_valor, '') or '').strip()
+            if v_str and v_str.lower() not in ('nan', 'none', ''):
+                try:
+                    # Suporta formato BR (1.500,00) e US (1500.00)
+                    if ',' in v_str and '.' in v_str:
+                        v_str = v_str.replace('.', '').replace(',', '.')
+                    elif ',' in v_str:
+                        v_str = v_str.replace(',', '.')
+                    valor_item = float(v_str)
+                except ValueError:
+                    pass
+
         # Verificar duplicidade
         existente = Consulta.query.filter_by(
             empresa_id=empresa_id,
@@ -163,6 +180,7 @@ def processar_excel(caminho_arquivo, empresa_id, nome_lote=None):
                 descricao=descricao,
                 codigo_produto=codigo,
                 codigo_cest=cest,
+                valor_item=valor_item,
                 status_processamento=status_item,
             )
             db.session.add(item)

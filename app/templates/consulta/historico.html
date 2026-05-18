@@ -42,7 +42,7 @@
       </ul>
     </div>
 
-    <a href="{{ url_for('consulta.exportar', empresa_id=empresa_id or '', monofasico=monofasico or '', inconsistencia=inconsistencia or '') }}"
+    <a href="{{ url_for('consulta.exportar', empresa_id=empresa_id or '', monofasico=monofasico or '', inconsistencia=inconsistencia or '', data_nf_de=data_nf_de or '', data_nf_ate=data_nf_ate or '') }}"
        class="btn btn-sm btn-success">
       <i class="bi bi-file-earmark-excel"></i> Exportar
     </a>
@@ -91,6 +91,20 @@
         <button type="submit" class="btn btn-sm btn-primary w-100">
           <i class="bi bi-funnel"></i>
         </button>
+      </div>
+    </div>
+    <div class="row g-2 mt-1">
+      <div class="col-auto d-flex align-items-center">
+        <small class="text-muted me-2">Data NF:</small>
+      </div>
+      <div class="col-md-2">
+        <input type="date" name="data_nf_de" class="form-control form-control-sm"
+               title="Data NF — De" value="{{ data_nf_de or '' }}">
+      </div>
+      <div class="col-auto d-flex align-items-center"><small class="text-muted">até</small></div>
+      <div class="col-md-2">
+        <input type="date" name="data_nf_ate" class="form-control form-control-sm"
+               title="Data NF — Até" value="{{ data_nf_ate or '' }}">
       </div>
     </div>
   </div>
@@ -150,7 +164,7 @@
 
 <!-- Paginação (preserva filtros ativos) -->
 {% if consultas.pages > 1 %}
-{% set qs_base = '&empresa_id=' ~ (empresa_id or '') ~ '&monofasico=' ~ (monofasico or '') ~ '&inconsistencia=' ~ (inconsistencia or '') ~ '&tipo=' ~ (tipo_filtro or '') ~ '&ncm=' ~ (ncm_filtro or '') %}
+{% set qs_base = '&empresa_id=' ~ (empresa_id or '') ~ '&monofasico=' ~ (monofasico or '') ~ '&inconsistencia=' ~ (inconsistencia or '') ~ '&tipo=' ~ (tipo_filtro or '') ~ '&ncm=' ~ (ncm_filtro or '') ~ '&data_nf_de=' ~ (data_nf_de or '') ~ '&data_nf_ate=' ~ (data_nf_ate or '') %}
 <nav>
   <ul class="pagination pagination-sm justify-content-center">
     {% if consultas.has_prev %}

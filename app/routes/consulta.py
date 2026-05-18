@@ -4,7 +4,7 @@ from flask import (Blueprint, render_template, redirect, url_for,
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa
-from app.models.consulta import Consulta, LoteConsulta
+from app.models.consulta import Consulta, LoteConsulta, LoteItem
 from app.services.ncm_validator import validar_ncm, _normalizar_ncm, CST_DESCRICAO, derivar_cfop
 
 
@@ -256,12 +256,15 @@ def lote_xml():
 @consulta_bp.route('/historico')
 @login_required
 def historico():
+    from datetime import datetime as _dt
     page = request.args.get('page', 1, type=int)
     empresa_id = request.args.get('empresa_id', type=int)
     monofasico = request.args.get('monofasico')
     inconsistencia = request.args.get('inconsistencia')
     ncm_filtro = request.args.get('ncm', '').strip()
     tipo_filtro = request.args.get('tipo')
+    data_nf_de  = request.args.get('data_nf_de', '').strip()
+    data_nf_ate = request.args.get('data_nf_ate', '').strip()
 
     query = Consulta.query
 
@@ -283,6 +286,19 @@ def historico():
         query = query.filter(Consulta.ncm_consultado.ilike(f'%{ncm_filtro}%'))
     if tipo_filtro:
         query = query.filter(Consulta.tipo_consulta == tipo_filtro)
+    if data_nf_de or data_nf_ate:
+        subq = db.session.query(LoteItem.consulta_id).distinct()
+        if data_nf_de:
+            try:
+                subq = subq.filter(LoteItem.data_nf >= _dt.strptime(data_nf_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_nf_ate:
+            try:
+                subq = subq.filter(LoteItem.data_nf <= _dt.strptime(data_nf_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        query = query.filter(Consulta.id.in_(subq))
 
     consultas = query.order_by(Consulta.created_at.desc()).paginate(page=page, per_page=20)
     empresas = current_user.empresas if not current_user.is_admin else Empresa.query.filter_by(ativo=True).all()
@@ -291,7 +307,8 @@ def historico():
                            consultas=consultas, empresas=empresas,
                            empresa_id=empresa_id, monofasico=monofasico,
                            inconsistencia=inconsistencia, ncm_filtro=ncm_filtro,
-                           tipo_filtro=tipo_filtro)
+                           tipo_filtro=tipo_filtro,
+                           data_nf_de=data_nf_de, data_nf_ate=data_nf_ate)
 
 
 @consulta_bp.route('/<int:id>')
@@ -305,11 +322,14 @@ def detalhe(id):
 @consulta_bp.route('/exportar')
 @login_required
 def exportar():
+    from datetime import datetime as _dt
     empresa_id = request.args.get('empresa_id', type=int)
     monofasico = request.args.get('monofasico')
     inconsistencia = request.args.get('inconsistencia')
     lote_id = request.args.get('lote_id', type=int)
     lote_ids_str = request.args.get('lote_ids', '')
+    data_nf_de  = request.args.get('data_nf_de', '').strip()
+    data_nf_ate = request.args.get('data_nf_ate', '').strip()
 
     # Montar lista de lote_ids quando vindo da tela de resultado de lote
     lote_ids = []
@@ -340,6 +360,19 @@ def exportar():
         query = query.filter(Consulta.monofasico == False)
     if inconsistencia == '1':
         query = query.filter(Consulta.inconsistencia_detectada == True)
+    if data_nf_de or data_nf_ate:
+        subq = db.session.query(LoteItem.consulta_id).distinct()
+        if data_nf_de:
+            try:
+                subq = subq.filter(LoteItem.data_nf >= _dt.strptime(data_nf_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_nf_ate:
+            try:
+                subq = subq.filter(LoteItem.data_nf <= _dt.strptime(data_nf_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        query = query.filter(Consulta.id.in_(subq))
 
     consultas = query.order_by(Consulta.created_at.desc()).all()
 

@@ -50,7 +50,15 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
     ide = inf_nfe.find('nfe:ide', NS) or inf_nfe.find('ide')
     emit = inf_nfe.find('nfe:emit', NS) or inf_nfe.find('emit')
 
-    data_emissao = _tag(ide, 'dhEmi') or _tag(ide, 'dEmi') if ide is not None else ''
+    data_emissao_raw = _tag(ide, 'dhEmi') or _tag(ide, 'dEmi') if ide is not None else ''
+    data_emissao = data_emissao_raw
+
+    data_nf_date = None
+    if data_emissao_raw:
+        try:
+            data_nf_date = datetime.strptime(data_emissao_raw[:10], '%Y-%m-%d').date()
+        except ValueError:
+            pass
     cnpj_emit = _tag(emit, 'CNPJ') if emit is not None else ''
     razao_emit = _tag(emit, 'xNome') if emit is not None else ''
     n_nf = _tag(ide, 'nNF') if ide is not None else ''
@@ -94,6 +102,14 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
         x_prod = _tag(prod, 'xProd')
         cest = _tag(prod, 'CEST')
 
+        v_prod_str = _tag(prod, 'vProd')
+        valor_item = None
+        if v_prod_str:
+            try:
+                valor_item = float(v_prod_str.replace(',', '.'))
+            except ValueError:
+                pass
+
         # CST atual da NF-e — busca por iter() para ignorar namespace
         imposto = det.find('nfe:imposto', NS) or det.find('imposto')
         cst_atual = None
@@ -134,6 +150,8 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
                 descricao=x_prod,
                 codigo_produto=c_prod,
                 codigo_cest=cest,
+                data_nf=data_nf_date,
+                valor_item=valor_item,
                 status_processamento=status_item,
             )
             db.session.add(item)
@@ -170,6 +188,8 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
                 linha_original=total,
                 ncm=ncm_limpo,
                 descricao=x_prod,
+                data_nf=data_nf_date,
+                valor_item=valor_item,
                 status_processamento='erro',
                 mensagem_erro=str(e)[:300],
             )
