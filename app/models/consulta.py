@@ -27,8 +27,15 @@ class Consulta(db.Model):
     inconsistencia_detectada = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Revisão / homologação
+    status_revisao = db.Column(db.String(20), nullable=False, default='pendente')
+    revisado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    revisado_em = db.Column(db.DateTime, nullable=True)
+    motivo_revisao = db.Column(db.Text, nullable=True)
+
     empresa = db.relationship('Empresa', back_populates='consultas')
     lote_itens = db.relationship('LoteItem', back_populates='consulta', lazy='dynamic')
+    revisado_por = db.relationship('Usuario', foreign_keys=[revisado_por_id])
 
     __table_args__ = (
         db.UniqueConstraint('empresa_id', 'ncm_consultado', name='unique_empresa_ncm'),
@@ -81,3 +88,23 @@ class LoteItem(db.Model):
 
     def __repr__(self):
         return f'<LoteItem {self.ncm} - {self.status_processamento}>'
+
+
+class RevisaoLog(db.Model):
+    __tablename__ = 'revisao_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consultas.id', ondelete='CASCADE'),
+                            nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    status_anterior = db.Column(db.String(20), nullable=True)
+    status_novo = db.Column(db.String(20), nullable=False)
+    motivo = db.Column(db.Text, nullable=True)
+    criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    consulta = db.relationship('Consulta', backref=db.backref('revisoes', lazy='dynamic',
+                                                               cascade='all, delete-orphan'))
+    usuario = db.relationship('Usuario')
+
+    def __repr__(self):
+        return f'<RevisaoLog consulta={self.consulta_id} {self.status_anterior}->{self.status_novo}>'

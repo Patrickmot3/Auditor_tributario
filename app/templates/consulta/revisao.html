@@ -1,0 +1,375 @@
+{% extends 'base.html' %}
+{% block title %}Revisão de Classificações{% endblock %}
+
+{% block extra_css %}
+<style>
+  .nav-tabs .nav-link { font-size: .875rem; }
+  .tab-badge { font-size: .7rem; vertical-align: middle; }
+  .tbl-revisao td, .tbl-revisao th { vertical-align: middle; font-size: .85rem; }
+  .btn-acao { font-size: .78rem; padding: .2rem .5rem; }
+  .motivo-cell { max-width: 220px; word-break: break-word; }
+</style>
+{% endblock %}
+
+{% macro badge_status(s) %}
+  {% if s == 'aceito' %}<span class="badge bg-success">Aceito</span>
+  {% elif s == 'aceito_ressalva' %}<span class="badge bg-info text-dark">Aceito c/ Ressalva</span>
+  {% elif s == 'recusado' %}<span class="badge bg-danger">Recusado</span>
+  {% else %}<span class="badge bg-secondary">Pendente</span>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5><i class="bi bi-clipboard2-check"></i> Revisão de Classificações</h5>
+
+  <!-- Filtro empresa -->
+  <form method="GET" class="d-flex gap-2 align-items-center">
+    <input type="hidden" name="aba" value="{{ aba }}">
+    <select name="empresa_id" class="form-select form-select-sm" style="width:220px" onchange="this.form.submit()">
+      <option value="">Todas as empresas</option>
+      {% for e in empresas %}
+        <option value="{{ e.id }}" {% if empresa_id == e.id %}selected{% endif %}>{{ e.razao_social }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- Abas -->
+<ul class="nav nav-tabs mb-3" id="abaRevisao">
+  {% for slug, label, lista, cor in [
+      ('pendente',        'Pendentes',          pendentes,        'secondary'),
+      ('aceito',          'Aceitos',             aceitos,          'success'),
+      ('aceito_ressalva', 'Aceitos c/ Ressalva', aceitos_ressalva, 'info'),
+      ('recusado',        'Recusados',           recusados,        'danger'),
+      ('historico',       'Histórico',           historico,        'primary'),
+  ] %}
+  <li class="nav-item">
+    <a class="nav-link {% if aba == slug %}active{% endif %}"
+       href="{{ url_for('consulta.revisao', aba=slug, empresa_id=empresa_id or '') }}">
+      {{ label }}
+      <span class="badge bg-{{ cor }} tab-badge ms-1">{{ lista | length }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+<!-- ── ABA PENDENTES ─────────────────────────────────────────────────────── -->
+{% if aba == 'pendente' %}
+
+{% if pendentes %}
+<form method="POST" action="{{ url_for('consulta.revisao_acao') }}" id="frmRevisao">
+  <input type="hidden" name="acao" id="hAcao">
+  <input type="hidden" name="motivo" id="hMotivo">
+
+  <!-- Ações em lote -->
+  <div class="d-flex gap-2 mb-2 align-items-center flex-wrap">
+    <span class="text-muted small me-1"><span id="selCount">0</span> selecionado(s)</span>
+    <button type="button" class="btn btn-sm btn-success btn-acao"
+            onclick="acaoLote('aceitar')" id="btnLoteAceitar" disabled>
+      <i class="bi bi-check-lg"></i> Aceitar selecionados
+    </button>
+    <button type="button" class="btn btn-sm btn-info btn-acao text-dark"
+            onclick="abrirModal('aceitar_ressalva', null)" id="btnLoteRessalva" disabled>
+      <i class="bi bi-chat-left-text"></i> Aceitar c/ Ressalva
+    </button>
+    <button type="button" class="btn btn-sm btn-danger btn-acao"
+            onclick="abrirModal('recusar', null)" id="btnLoteRecusar" disabled>
+      <i class="bi bi-x-lg"></i> Recusar selecionados
+    </button>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-hover tbl-revisao">
+      <thead class="table-dark">
+        <tr>
+          <th style="width:36px">
+            <input type="checkbox" class="form-check-input" id="chkTodos" title="Selecionar todos">
+          </th>
+          <th>NCM</th>
+          <th>Empresa</th>
+          <th>Produto</th>
+          <th class="text-center">Monofásico</th>
+          <th>Grupo / Base Legal</th>
+          <th class="text-center">CST Sugerido</th>
+          <th class="text-center">Inconsistência</th>
+          <th>Data</th>
+          <th style="width:200px">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in pendentes %}
+        <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.monofasico %}table-success{% endif %}">
+          <td><input type="checkbox" name="consulta_ids" value="{{ c.id }}"
+                     class="form-check-input chk-item"></td>
+          <td class="font-monospace fw-bold">
+            <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">
+              {{ c.ncm_consultado }}
+            </a>
+          </td>
+          <td><small>{{ c.empresa.razao_social if c.empresa else '—' }}</small></td>
+          <td><small>{{ (c.descricao_produto or '')[:45] }}{% if c.descricao_produto and c.descricao_produto|length > 45 %}…{% endif %}</small></td>
+          <td class="text-center">
+            {% if c.monofasico %}<span class="badge bg-success">Sim</span>
+            {% elif c.monofasico == false %}<span class="badge bg-danger">Não</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <small>{{ c.grupo_tributario or '—' }}</small>
+            {% if c.lei_aplicada %}<br><span class="text-muted" style="font-size:.7rem">{{ c.lei_aplicada[:50] }}</span>{% endif %}
+          </td>
+          <td class="text-center font-monospace fw-bold">{{ c.cst_sugerido or '—' }}</td>
+          <td class="text-center">
+            {% if c.inconsistencia_detectada %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+            {% else %}—{% endif %}
+          </td>
+          <td><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
+          <td>
+            <div class="d-flex gap-1 flex-wrap">
+              <button type="button" class="btn btn-success btn-acao"
+                      onclick="acaoIndividual('aceitar', {{ c.id }})">
+                <i class="bi bi-check"></i> Aceitar
+              </button>
+              <button type="button" class="btn btn-info btn-acao text-dark"
+                      onclick="abrirModal('aceitar_ressalva', {{ c.id }})">
+                <i class="bi bi-chat-left-text"></i>
+              </button>
+              <button type="button" class="btn btn-danger btn-acao"
+                      onclick="abrirModal('recusar', {{ c.id }})">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% else %}
+<div class="alert alert-success"><i class="bi bi-check-circle"></i> Nenhuma classificação pendente de revisão.</div>
+{% endif %}
+
+<!-- ── ABAS ACEITO / ACEITO_RESSALVA / RECUSADO ───────────────────────── -->
+{% elif aba in ('aceito', 'aceito_ressalva', 'recusado') %}
+
+{% set lista_aba = aceitos if aba == 'aceito' else (aceitos_ressalva if aba == 'aceito_ressalva' else recusados) %}
+
+{% if lista_aba %}
+<form method="POST" action="{{ url_for('consulta.revisao_acao') }}" id="frmRevisao">
+  <input type="hidden" name="acao" id="hAcao">
+  <input type="hidden" name="motivo" id="hMotivo">
+
+  <div class="d-flex gap-2 mb-2 align-items-center">
+    <span class="text-muted small me-1"><span id="selCount">0</span> selecionado(s)</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-acao"
+            onclick="acaoLote('reverter')" id="btnReverter" disabled>
+      <i class="bi bi-arrow-counterclockwise"></i> Reverter para Pendente
+    </button>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-hover tbl-revisao">
+      <thead class="table-dark">
+        <tr>
+          <th style="width:36px">
+            <input type="checkbox" class="form-check-input" id="chkTodos">
+          </th>
+          <th>NCM</th>
+          <th>Empresa</th>
+          <th>Produto</th>
+          <th class="text-center">Monofásico</th>
+          <th>Grupo</th>
+          <th class="text-center">CST Sugerido</th>
+          <th>Revisado por</th>
+          <th>Data Revisão</th>
+          <th class="motivo-cell">Motivo / Obs.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in lista_aba %}
+        <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.monofasico %}table-success{% endif %}">
+          <td><input type="checkbox" name="consulta_ids" value="{{ c.id }}"
+                     class="form-check-input chk-item"></td>
+          <td class="font-monospace fw-bold">
+            <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">
+              {{ c.ncm_consultado }}
+            </a>
+          </td>
+          <td><small>{{ c.empresa.razao_social if c.empresa else '—' }}</small></td>
+          <td><small>{{ (c.descricao_produto or '')[:40] }}…</small></td>
+          <td class="text-center">
+            {% if c.monofasico %}<span class="badge bg-success">Sim</span>
+            {% elif c.monofasico == false %}<span class="badge bg-danger">Não</span>
+            {% else %}—{% endif %}
+          </td>
+          <td><small>{{ c.grupo_tributario or '—' }}</small></td>
+          <td class="text-center font-monospace fw-bold">{{ c.cst_sugerido or '—' }}</td>
+          <td><small>{{ c.revisado_por.nome if c.revisado_por else '—' }}</small></td>
+          <td><small>{{ c.revisado_em.strftime('%d/%m/%Y %H:%M') if c.revisado_em else '—' }}</small></td>
+          <td class="motivo-cell"><small class="text-muted">{{ c.motivo_revisao or '—' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% else %}
+<div class="alert alert-secondary">Nenhum item nesta categoria.</div>
+{% endif %}
+
+<!-- ── ABA HISTÓRICO ──────────────────────────────────────────────────── -->
+{% elif aba == 'historico' %}
+
+{% if historico %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover tbl-revisao">
+    <thead class="table-dark">
+      <tr>
+        <th>Data / Hora</th>
+        <th>Usuário</th>
+        <th>NCM</th>
+        <th>Empresa</th>
+        <th class="text-center">De</th>
+        <th class="text-center">Para</th>
+        <th class="motivo-cell">Motivo / Obs.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in historico %}
+      <tr>
+        <td><small class="font-monospace">{{ log.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+        <td><small>{{ log.usuario.nome if log.usuario else '—' }}</small></td>
+        <td class="font-monospace fw-bold">
+          {% if log.consulta %}
+            <a href="{{ url_for('consulta.detalhe', id=log.consulta_id) }}" class="text-decoration-none">
+              {{ log.consulta.ncm_consultado }}
+            </a>
+          {% else %}—{% endif %}
+        </td>
+        <td><small>{{ log.consulta.empresa.razao_social if log.consulta and log.consulta.empresa else '—' }}</small></td>
+        <td class="text-center">{{ badge_status(log.status_anterior) }}</td>
+        <td class="text-center">{{ badge_status(log.status_novo) }}</td>
+        <td class="motivo-cell"><small class="text-muted">{{ log.motivo or '—' }}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-secondary">Nenhuma revisão registrada.</div>
+{% endif %}
+
+{% endif %}
+
+<!-- Modal motivo -->
+<div class="modal fade" id="modalMotivo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitulo">Informe o motivo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label id="modalLabel" class="form-label fw-bold small"></label>
+        <textarea id="txtMotivo" class="form-control" rows="4"
+                  placeholder="Descreva o motivo..."></textarea>
+        <div id="msgObrigatorio" class="text-danger small mt-1 d-none">
+          Este campo é obrigatório.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmarModal">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let modalAcao = null;
+let modalIds  = [];   // null = usar checkboxes
+const modal   = new bootstrap.Modal(document.getElementById('modalMotivo'));
+
+const LABELS = {
+  recusar:          { titulo: 'Motivo da Recusa',      label: 'Por que está recusando essa classificação?', obrig: true  },
+  aceitar_ressalva: { titulo: 'Aceitar com Ressalva',  label: 'Qual a observação?',                         obrig: true  },
+};
+
+function abrirModal(acao, idConsulta) {
+  modalAcao = acao;
+  modalIds  = idConsulta !== null ? [idConsulta] : null;
+  const cfg = LABELS[acao] || {};
+  document.getElementById('modalTitulo').textContent = cfg.titulo || 'Confirmar';
+  document.getElementById('modalLabel').textContent  = cfg.label  || 'Motivo:';
+  document.getElementById('txtMotivo').value = '';
+  document.getElementById('msgObrigatorio').classList.add('d-none');
+  modal.show();
+}
+
+document.getElementById('btnConfirmarModal').addEventListener('click', () => {
+  const motivo = document.getElementById('txtMotivo').value.trim();
+  const cfg    = LABELS[modalAcao] || {};
+  if (cfg.obrig && !motivo) {
+    document.getElementById('msgObrigatorio').classList.remove('d-none');
+    return;
+  }
+  modal.hide();
+  if (modalIds) {
+    submeter(modalAcao, modalIds, motivo);
+  } else {
+    acaoLote(modalAcao, motivo);
+  }
+});
+
+function acaoIndividual(acao, id) {
+  submeter(acao, [id], '');
+}
+
+function acaoLote(acao, motivo) {
+  const ids = [...document.querySelectorAll('.chk-item:checked')].map(c => c.value);
+  if (!ids.length) return;
+  submeter(acao, ids, motivo || '');
+}
+
+function submeter(acao, ids, motivo) {
+  const frm = document.getElementById('frmRevisao');
+  document.getElementById('hAcao').value   = acao;
+  document.getElementById('hMotivo').value = motivo;
+
+  // Limpa inputs anteriores e adiciona os ids
+  frm.querySelectorAll('input[name="consulta_ids"]').forEach(el => el.remove());
+  ids.forEach(id => {
+    const inp = document.createElement('input');
+    inp.type  = 'hidden';
+    inp.name  = 'consulta_ids';
+    inp.value = id;
+    frm.appendChild(inp);
+  });
+  frm.submit();
+}
+
+// Selecionar tudo + contador
+const chkTodos = document.getElementById('chkTodos');
+if (chkTodos) {
+  chkTodos.addEventListener('change', () => {
+    document.querySelectorAll('.chk-item').forEach(c => c.checked = chkTodos.checked);
+    atualizarContador();
+  });
+}
+document.querySelectorAll('.chk-item').forEach(c => c.addEventListener('change', atualizarContador));
+
+function atualizarContador() {
+  const n = document.querySelectorAll('.chk-item:checked').length;
+  const el = document.getElementById('selCount');
+  if (el) el.textContent = n;
+
+  ['btnLoteAceitar','btnLoteRessalva','btnLoteRecusar','btnReverter'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = n === 0;
+  });
+}
+</script>
+{% endblock %}

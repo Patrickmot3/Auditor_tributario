@@ -121,6 +121,11 @@
         <i class="bi bi-clock-history"></i> Histórico
       </a>
     </li>
+    <li class="nav-item">
+      <a href="{{ url_for('consulta.revisao') }}" class="nav-link {% if request.endpoint == 'consulta.revisao' or request.endpoint == 'consulta.revisao_acao' %}active{% endif %}">
+        <i class="bi bi-clipboard2-check"></i> Revisão
+      </a>
+    </li>
   </ul>
   <hr class="border-secondary mx-2">
   <div class="px-3 py-2 text-muted small text-uppercase fw-bold mb-1">Cadastros</div>

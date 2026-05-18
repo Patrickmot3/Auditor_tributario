@@ -4,7 +4,7 @@ from flask import (Blueprint, render_template, redirect, url_for,
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa
-from app.models.consulta import Consulta, LoteConsulta, LoteItem
+from app.models.consulta import Consulta, LoteConsulta, LoteItem, RevisaoLog
 from app.services.ncm_validator import validar_ncm, _normalizar_ncm, CST_DESCRICAO, derivar_cfop
 
 
@@ -309,6 +309,95 @@ def historico():
                            inconsistencia=inconsistencia, ncm_filtro=ncm_filtro,
                            tipo_filtro=tipo_filtro,
                            data_nf_de=data_nf_de, data_nf_ate=data_nf_ate)
+
+
+@consulta_bp.route('/revisao')
+@login_required
+def revisao():
+    aba = request.args.get('aba', 'pendente')
+    empresa_id = request.args.get('empresa_id', type=int)
+
+    base = Consulta.query
+    if not current_user.is_admin:
+        ids = [e.id for e in current_user.empresas]
+        base = base.filter(Consulta.empresa_id.in_(ids))
+    if empresa_id:
+        base = base.filter(Consulta.empresa_id == empresa_id)
+
+    pendentes        = base.filter(Consulta.status_revisao == 'pendente').order_by(Consulta.created_at.desc()).all()
+    aceitos          = base.filter(Consulta.status_revisao == 'aceito').order_by(Consulta.revisado_em.desc()).all()
+    aceitos_ressalva = base.filter(Consulta.status_revisao == 'aceito_ressalva').order_by(Consulta.revisado_em.desc()).all()
+    recusados        = base.filter(Consulta.status_revisao == 'recusado').order_by(Consulta.revisado_em.desc()).all()
+
+    log_q = RevisaoLog.query.order_by(RevisaoLog.criado_em.desc())
+    if not current_user.is_admin:
+        ids = [e.id for e in current_user.empresas]
+        log_q = log_q.join(Consulta, RevisaoLog.consulta_id == Consulta.id).filter(Consulta.empresa_id.in_(ids))
+    historico = log_q.limit(300).all()
+
+    empresas = current_user.empresas if not current_user.is_admin else Empresa.query.filter_by(ativo=True).all()
+
+    return render_template('consulta/revisao.html',
+                           pendentes=pendentes, aceitos=aceitos,
+                           aceitos_ressalva=aceitos_ressalva, recusados=recusados,
+                           historico=historico, aba=aba,
+                           empresa_id=empresa_id, empresas=empresas)
+
+
+@consulta_bp.route('/revisao/acao', methods=['POST'])
+@login_required
+def revisao_acao():
+    from datetime import datetime as _dt, timezone as _tz
+
+    acao     = request.form.get('acao', '').strip()
+    motivo   = request.form.get('motivo', '').strip()
+    ids_raw  = request.form.getlist('consulta_ids')
+    cons_ids = [int(x) for x in ids_raw if x.strip().isdigit()]
+
+    status_map = {'aceitar': 'aceito', 'aceitar_ressalva': 'aceito_ressalva', 'recusar': 'recusado',
+                  'reverter': 'pendente'}
+    novo_status = status_map.get(acao)
+
+    if not novo_status or not cons_ids:
+        flash('Nenhum item selecionado ou ação inválida.', 'warning')
+        return redirect(url_for('consulta.revisao'))
+
+    if acao in ('recusar', 'aceitar_ressalva') and not motivo:
+        flash('Informe o motivo antes de continuar.', 'warning')
+        return redirect(url_for('consulta.revisao'))
+
+    ids_autorizados = {e.id for e in current_user.empresas} if not current_user.is_admin else None
+    agora = _dt.now(_tz.utc)
+
+    consultas = Consulta.query.filter(Consulta.id.in_(cons_ids)).all()
+    atualizados = 0
+    for c in consultas:
+        if ids_autorizados and c.empresa_id not in ids_autorizados:
+            continue
+        log = RevisaoLog(
+            consulta_id=c.id,
+            usuario_id=current_user.id,
+            status_anterior=c.status_revisao,
+            status_novo=novo_status,
+            motivo=motivo or None,
+            criado_em=agora,
+        )
+        db.session.add(log)
+        c.status_revisao  = novo_status
+        c.revisado_por_id = current_user.id
+        c.revisado_em     = agora
+        c.motivo_revisao  = motivo or None
+        atualizados += 1
+
+    db.session.commit()
+
+    labels = {'aceito': 'aceitos', 'aceito_ressalva': 'aceitos com ressalva',
+              'recusado': 'recusados', 'pendente': 'revertidos para pendente'}
+    flash(f'{atualizados} item(s) {labels.get(novo_status, novo_status)}.', 'success')
+
+    aba_dest = {'aceito': 'aceito', 'aceito_ressalva': 'aceito_ressalva',
+                'recusado': 'recusado', 'pendente': 'pendente'}
+    return redirect(url_for('consulta.revisao', aba=aba_dest.get(novo_status, 'pendente')))
 
 
 @consulta_bp.route('/<int:id>')
