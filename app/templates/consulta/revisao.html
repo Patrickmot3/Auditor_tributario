@@ -58,6 +58,7 @@
 
 {% if pendentes %}
 <form method="POST" action="{{ url_for('consulta.revisao_acao') }}" id="frmRevisao">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="acao" id="hAcao">
   <input type="hidden" name="motivo" id="hMotivo">
 
@@ -157,6 +158,7 @@
 
 {% if lista_aba %}
 <form method="POST" action="{{ url_for('consulta.revisao_acao') }}" id="frmRevisao">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="acao" id="hAcao">
   <input type="hidden" name="motivo" id="hMotivo">
 
