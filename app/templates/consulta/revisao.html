@@ -99,7 +99,7 @@
       </thead>
       <tbody>
         {% for c in pendentes %}
-        <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.cst_sugerido in ('02','03','04') %}table-success{% elif c.cst_sugerido == '05' %}table-primary{% endif %}">
+        <tr class="{% if c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
           <td><input type="checkbox" name="consulta_ids" value="{{ c.id }}"
                      class="form-check-input chk-item"></td>
           <td class="font-monospace fw-bold">
@@ -190,7 +190,7 @@
       </thead>
       <tbody>
         {% for c in lista_aba %}
-        <tr class="{% if c.inconsistencia_detectada %}table-warning{% elif c.cst_sugerido in ('02','03','04') %}table-success{% elif c.cst_sugerido == '05' %}table-primary{% endif %}">
+        <tr class="{% if c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
           <td><input type="checkbox" name="consulta_ids" value="{{ c.id }}"
                      class="form-check-input chk-item"></td>
           <td class="font-monospace fw-bold">
