@@ -217,7 +217,7 @@
           <td><small>{{ c.grupo_tributario or '—' }}</small></td>
           <td class="text-center font-monospace fw-bold">{{ c.cst_sugerido or '—' }}</td>
           <td><small>{{ c.revisado_por.nome if c.revisado_por else '—' }}</small></td>
-          <td><small>{{ c.revisado_em.strftime('%d/%m/%Y %H:%M') if c.revisado_em else '—' }}</small></td>
+          <td><small>{{ c.revisado_em | brt if c.revisado_em else '—' }}</small></td>
           <td class="motivo-cell"><small class="text-muted">{{ c.motivo_revisao or '—' }}</small></td>
         </tr>
         {% endfor %}
@@ -249,7 +249,7 @@
     <tbody>
       {% for log in historico %}
       <tr>
-        <td><small class="font-monospace">{{ log.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+        <td><small class="font-monospace">{{ log.criado_em | brt }}</small></td>
         <td><small>{{ log.usuario.nome if log.usuario else '—' }}</small></td>
         <td class="font-monospace fw-bold">
           {% if log.consulta %}
