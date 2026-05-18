@@ -53,6 +53,15 @@
   {% endfor %}
 </ul>
 
+{% if aba in ('aceito', 'aceito_ressalva', 'recusado') %}
+<div class="d-flex justify-content-end mb-2">
+  <a href="{{ url_for('consulta.revisao_exportar', aba=aba, empresa_id=empresa_id or '') }}"
+     class="btn btn-sm btn-success">
+    <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+  </a>
+</div>
+{% endif %}
+
 <!-- ── ABA PENDENTES ─────────────────────────────────────────────────────── -->
 {% if aba == 'pendente' %}
 

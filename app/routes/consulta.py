@@ -357,10 +357,47 @@ def revisao():
                            empresa_id=empresa_id, empresas=empresas)
 
 
+@consulta_bp.route('/revisao/exportar')
+@login_required
+def revisao_exportar():
+    from sqlalchemy import or_, and_
+    aba        = request.args.get('aba', 'aceito')
+    empresa_id = request.args.get('empresa_id', type=int)
+
+    base = Consulta.query.join(Empresa, Consulta.empresa_id == Empresa.id)
+    if not current_user.is_admin:
+        ids = [e.id for e in current_user.empresas]
+        base = base.filter(Consulta.empresa_id.in_(ids))
+    if empresa_id:
+        base = base.filter(Consulta.empresa_id == empresa_id)
+
+    filtro_regime = or_(
+        and_(Empresa.regime_tributario == 'simples_nacional',
+             Consulta.cst_sugerido.in_(('02', '03', '04', '05'))),
+        and_(Empresa.regime_tributario != 'simples_nacional',
+             Consulta.grupo_tributario.isnot(None),
+             Consulta.grupo_tributario != ''),
+    )
+
+    status_map  = {'aceito': 'aceito', 'aceito_ressalva': 'aceito_ressalva', 'recusado': 'recusado'}
+    status_rev  = status_map.get(aba, 'aceito')
+    labels_exp  = {'aceito': 'Aceitos', 'aceito_ressalva': 'Aceitos c Ressalva', 'recusado': 'Recusados'}
+
+    consultas = (base.filter(filtro_regime, Consulta.status_revisao == status_rev)
+                 .order_by(Consulta.ncm_consultado).all())
+
+    from app.services.export_excel import gerar_excel_revisao
+    output = gerar_excel_revisao(consultas, labels_exp.get(aba, 'Revisão'))
+    nome   = f'tribsync_revisao_{aba}.xlsx'
+    return send_file(output, download_name=nome, as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 @consulta_bp.route('/revisao/acao', methods=['POST'])
 @login_required
 def revisao_acao():
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
+    import pytz as _pytz
 
     acao     = request.form.get('acao', '').strip()
     motivo   = request.form.get('motivo', '').strip()
@@ -380,7 +417,7 @@ def revisao_acao():
         return redirect(url_for('consulta.revisao'))
 
     ids_autorizados = {e.id for e in current_user.empresas} if not current_user.is_admin else None
-    agora = _dt.now(_tz.utc)
+    agora = _dt.now(_pytz.timezone('America/Sao_Paulo'))
 
     consultas = Consulta.query.filter(Consulta.id.in_(cons_ids)).all()
     atualizados = 0

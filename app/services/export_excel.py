@@ -220,6 +220,109 @@ def gerar_excel_lote_items(lote_ids):
     return output
 
 
+def gerar_excel_revisao(consultas, status_label='Revisão'):
+    """
+    Exporta consultas revisadas em duas abas:
+      1. Dados completos da revisão
+      2. NCMs únicos ordenados crescente (group by)
+    """
+    from app.services.ncm_validator import CST_DESCRICAO
+
+    output = io.BytesIO()
+    wb = xlsxwriter.Workbook(output, {'in_memory': True})
+
+    # ── formatos ──────────────────────────────────────────────────────────
+    fmt_cab  = wb.add_format({'bold': True, 'bg_color': '#1e3a5f', 'font_color': 'white',
+                               'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True})
+    fmt_norm = wb.add_format({'border': 1})
+    fmt_mono = wb.add_format({'bg_color': '#d4edda', 'border': 1})
+    fmt_inco = wb.add_format({'bg_color': '#f8d7da', 'border': 1})
+    fmt_ncm_cab = wb.add_format({'bold': True, 'bg_color': '#1e3a5f', 'font_color': 'white',
+                                  'border': 1, 'align': 'center'})
+    fmt_ncm = wb.add_format({'border': 1, 'font_name': 'Courier New'})
+
+    # ── aba 1: dados completos ─────────────────────────────────────────────
+    ws = wb.add_worksheet(f'Revisão — {status_label}'[:31])
+
+    colunas = [
+        ('NCM',                   12),
+        ('Empresa',               30),
+        ('CNPJ',                  18),
+        ('Produto',               40),
+        ('Monofásico',            12),
+        ('Grupo Tributário',      25),
+        ('Base Legal',            38),
+        ('CST Sugerido',          14),
+        ('Regime PIS/COFINS',     42),
+        ('Inconsistência',        16),
+        ('Status Revisão',        18),
+        ('Revisado por',          22),
+        ('Data / Hora Revisão',   20),
+        ('Motivo / Observação',   50),
+    ]
+
+    for ci, (nome, larg) in enumerate(colunas):
+        ws.write(0, ci, nome, fmt_cab)
+        ws.set_column(ci, ci, larg)
+    ws.set_row(0, 30)
+    ws.autofilter(0, 0, 0, len(colunas) - 1)
+
+    STATUS_LABELS = {
+        'aceito':          'Aceito',
+        'aceito_ressalva': 'Aceito c/ Ressalva',
+        'recusado':        'Recusado',
+        'pendente':        'Pendente',
+    }
+
+    for ri, c in enumerate(consultas, start=1):
+        empresa = c.empresa
+        mono_str  = 'Sim' if c.cst_sugerido in ('02', '03', '04') else ('ST' if c.cst_sugerido == '05' else 'Não')
+        inco_str  = 'Sim' if c.inconsistencia_detectada else 'Não'
+        regime    = CST_DESCRICAO.get(c.cst_sugerido or '', '')
+        rev_em    = c.revisado_em.strftime('%d/%m/%Y %H:%M') if c.revisado_em else ''
+        rev_por   = c.revisado_por.nome if c.revisado_por else ''
+
+        if c.inconsistencia_detectada and c.cst_sugerido in ('02', '03', '04', '05'):
+            fmt = fmt_inco
+        elif c.cst_sugerido in ('02', '03', '04'):
+            fmt = fmt_mono
+        else:
+            fmt = fmt_norm
+
+        linha = [
+            c.ncm_consultado or '',
+            empresa.razao_social if empresa else '',
+            empresa.cnpj_formatado if empresa else '',
+            c.descricao_produto or '',
+            mono_str,
+            c.grupo_tributario or '',
+            c.lei_aplicada or '',
+            c.cst_sugerido or '',
+            regime,
+            inco_str,
+            STATUS_LABELS.get(c.status_revisao, c.status_revisao),
+            rev_por,
+            rev_em,
+            c.motivo_revisao or '',
+        ]
+        for ci, val in enumerate(linha):
+            ws.write(ri, ci, val, fmt)
+
+    # ── aba 2: NCMs únicos ordenados ──────────────────────────────────────
+    ws2 = wb.add_worksheet('NCMs')
+    ws2.write(0, 0, 'NCM', fmt_ncm_cab)
+    ws2.set_column(0, 0, 14)
+    ws2.set_row(0, 22)
+
+    ncms_unicos = sorted({c.ncm_consultado for c in consultas if c.ncm_consultado})
+    for ri, ncm in enumerate(ncms_unicos, start=1):
+        ws2.write(ri, 0, ncm, fmt_ncm)
+
+    wb.close()
+    output.seek(0)
+    return output
+
+
 def _extra_lote_info_por_consulta(consultas):
     """
     Retorna {consulta_id: {'data_nf': date, 'valor_item': Decimal}} do LoteItem
