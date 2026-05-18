@@ -154,7 +154,7 @@
                   </thead>
                   <tbody>
                     {% for item in nota.itens %}
-                    <tr class="{% if item.inconsistencia %}table-warning{% elif item.monofasico %}table-success{% endif %}">
+                    <tr class="{% if item.cst_sugerido in ('02','03','04') %}{% if item.inconsistencia %}table-warning{% else %}table-success{% endif %}{% elif item.cst_sugerido == '05' %}{% if item.inconsistencia %}table-warning{% else %}table-primary{% endif %}{% endif %}">
                       <td class="font-monospace small">{{ item.ncm }}</td>
                       <td><small>{{ item.descricao or '—' }}</small></td>
                       <td class="font-monospace small">{{ item.cst_atual or '—' }}</td>
@@ -241,7 +241,7 @@
     </thead>
     <tbody>
       {% for item in relatorio.itens %}
-      <tr class="{% if item.inconsistencia %}table-warning{% elif item.monofasico %}table-success{% elif item.status == 'erro' %}table-danger{% endif %}">
+      <tr class="{% if item.status == 'erro' %}table-danger{% elif item.cst_sugerido in ('02','03','04') %}{% if item.inconsistencia %}table-warning{% else %}table-success{% endif %}{% elif item.cst_sugerido == '05' %}{% if item.inconsistencia %}table-warning{% else %}table-primary{% endif %}{% endif %}">
         <td class="font-monospace">{{ item.ncm }}</td>
         {% if tipo == 'excel' %}
           <td class="font-monospace small">{{ item.codigo or '—' }}</td>
