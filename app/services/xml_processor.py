@@ -207,6 +207,7 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
                 'inconsistencia': resultado.get('inconsistencia_detectada'),
                 'grupo': resultado.get('grupo'),
                 'lei': resultado.get('lei'),
+                'status': status_item,
             })
 
         except Exception as e:

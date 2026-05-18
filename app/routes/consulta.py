@@ -317,12 +317,25 @@ def revisao():
     aba = request.args.get('aba', 'pendente')
     empresa_id = request.args.get('empresa_id', type=int)
 
-    base = Consulta.query
+    from sqlalchemy import or_, and_
+
+    base = Consulta.query.join(Empresa, Consulta.empresa_id == Empresa.id)
     if not current_user.is_admin:
         ids = [e.id for e in current_user.empresas]
         base = base.filter(Consulta.empresa_id.in_(ids))
     if empresa_id:
         base = base.filter(Consulta.empresa_id == empresa_id)
+
+    # Simples Nacional → apenas monofásico (02/03/04) e ST (05)
+    # Outros regimes  → tudo com Grupo Tributário preenchido
+    filtro_regime = or_(
+        and_(Empresa.regime_tributario == 'simples_nacional',
+             Consulta.cst_sugerido.in_(('02', '03', '04', '05'))),
+        and_(Empresa.regime_tributario != 'simples_nacional',
+             Consulta.grupo_tributario.isnot(None),
+             Consulta.grupo_tributario != ''),
+    )
+    base = base.filter(filtro_regime)
 
     pendentes        = base.filter(Consulta.status_revisao == 'pendente').order_by(Consulta.created_at.desc()).all()
     aceitos          = base.filter(Consulta.status_revisao == 'aceito').order_by(Consulta.revisado_em.desc()).all()
