@@ -83,7 +83,13 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
                     f'CNPJ do emitente no XML ({cnpj_xml}) não corresponde ao '
                     f'CNPJ da empresa selecionada ({cnpj_empresa} — {empresa_obj.razao_social}). '
                     f'Selecione a empresa correta ou importe o XML pela empresa emitente.'
-                )
+                ),
+                'cnpj_emitente': cnpj_emit,
+                'razao_emitente': razao_emit,
+                'ch_nfe': ch_nfe,
+                'n_nf': n_nf,
+                'serie': serie,
+                'data_emissao': data_emissao,
             }
 
     dets = inf_nfe.findall('nfe:det', NS) or inf_nfe.findall('det')

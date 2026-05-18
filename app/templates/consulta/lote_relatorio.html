@@ -32,6 +32,30 @@
   </div>
 </div>
 
+{% if tipo == 'xml_lote' and relatorio.notas %}
+  {% set notas_rejeitadas = relatorio.notas | selectattr('erro') | list %}
+  {% if notas_rejeitadas %}
+  <div class="alert alert-danger d-flex align-items-start gap-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-octagon-fill fs-5 flex-shrink-0 mt-1"></i>
+    <div class="w-100">
+      <strong>{{ notas_rejeitadas | length }} arquivo(s) rejeitado(s) — emitente diferente da empresa selecionada</strong>
+      <p class="mb-1 mt-1 small">Os XMLs abaixo não foram processados porque o CNPJ do emitente não corresponde ao CNPJ da empresa selecionada. Verifique se escolheu a empresa correta ou se esses arquivos pertencem a outro emitente.</p>
+      <ul class="mb-0 small">
+        {% for nota in notas_rejeitadas %}
+        <li>
+          <span class="font-monospace">{{ nota.arquivo }}</span>
+          {% if nota.razao_emitente %}
+            — Emitente: <strong>{{ nota.razao_emitente }}</strong>
+            {% if nota.cnpj_emitente %} (CNPJ: {{ nota.cnpj_emitente }}){% endif %}
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
 {% if tipo == 'xml' and relatorio.ch_nfe %}
 <div class="card mb-3">
   <div class="card-body">
@@ -103,7 +127,9 @@
             </td>
             <td>
               {% if nota.erro %}
-                <span class="badge bg-danger" title="{{ nota.erro }}">Erro</span>
+                <span class="badge bg-danger">
+                  <i class="bi bi-x-circle"></i> CNPJ divergente
+                </span>
               {% else %}
                 <span class="badge bg-success">OK</span>
               {% endif %}
