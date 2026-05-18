@@ -64,6 +64,28 @@ def processar_xml_nfe(caminho_arquivo, empresa_id):
     n_nf = _tag(ide, 'nNF') if ide is not None else ''
     serie = _tag(ide, 'serie') if ide is not None else ''
 
+    # Validar se o emitente da NF-e corresponde à empresa selecionada
+    from app.models.empresa import Empresa as _Empresa
+    empresa_obj = db.session.get(_Empresa, empresa_id)
+    if empresa_obj:
+        cnpj_empresa = ''.join(c for c in (empresa_obj.cnpj or '') if c.isdigit())
+        cnpj_xml     = ''.join(c for c in cnpj_emit if c.isdigit())
+        if not cnpj_xml:
+            return {
+                'erro': (
+                    f'O XML não contém CNPJ do emitente. '
+                    f'Verifique se o arquivo é uma NF-e válida.'
+                )
+            }
+        if cnpj_xml != cnpj_empresa:
+            return {
+                'erro': (
+                    f'CNPJ do emitente no XML ({cnpj_xml}) não corresponde ao '
+                    f'CNPJ da empresa selecionada ({cnpj_empresa} — {empresa_obj.razao_social}). '
+                    f'Selecione a empresa correta ou importe o XML pela empresa emitente.'
+                )
+            }
+
     dets = inf_nfe.findall('nfe:det', NS) or inf_nfe.findall('det')
 
     numero_lote = (f'NF-e {serie.zfill(3)}-{n_nf.zfill(9)}' if n_nf
