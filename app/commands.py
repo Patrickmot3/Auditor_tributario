@@ -469,6 +469,7 @@ def register_commands(app):
             click.echo(f'  G700/G750: {atualizados} NCMs corrigidos (alimentos→CST06, livros→G750 CST07)')
 
         # 4a. Migrar fertilizantes (cap 31) do G800 para G700 → CST 06
+        g800 = GrupoTributario.query.filter_by(codigo='G800').first()
         fertilizantes_pos = {'3101', '3102', '3103', '3104', '3105'}
         corr_fert = 0
         if g800 and g700:
@@ -497,7 +498,6 @@ def register_commands(app):
                 click.echo(f'  G400: {corr_g400} NCMs bebidas frias corrigidos para CST 06')
 
         # 5. Garantir CST 09 em todos os registros do G800 (Suspensão)
-        g800 = GrupoTributario.query.filter_by(codigo='G800').first()
         corr_g800 = 0
         if g800:
             for r in NcmTributario.query.filter_by(
