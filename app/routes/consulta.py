@@ -303,12 +303,29 @@ def historico():
     consultas = query.order_by(Consulta.created_at.desc()).paginate(page=page, per_page=20)
     empresas = current_user.empresas if not current_user.is_admin else Empresa.query.filter_by(ativo=True).all()
 
+    from sqlalchemy import func as _func
+    consulta_ids = [c.id for c in consultas.items]
+    lote_item_map = {}
+    if consulta_ids:
+        rows = (db.session.query(
+                    LoteItem.consulta_id,
+                    _func.max(LoteItem.data_nf).label('data_nf'),
+                    _func.sum(LoteItem.valor_item).label('total_valor'))
+                .filter(LoteItem.consulta_id.in_(consulta_ids))
+                .group_by(LoteItem.consulta_id)
+                .all())
+        lote_item_map = {r.consulta_id: {'data_nf': r.data_nf, 'valor_item': r.total_valor}
+                         for r in rows}
+
+    from app.services.ncm_validator import CST_DESCRICAO
     return render_template('consulta/historico.html',
                            consultas=consultas, empresas=empresas,
                            empresa_id=empresa_id, monofasico=monofasico,
                            inconsistencia=inconsistencia, ncm_filtro=ncm_filtro,
                            tipo_filtro=tipo_filtro,
-                           data_nf_de=data_nf_de, data_nf_ate=data_nf_ate)
+                           data_nf_de=data_nf_de, data_nf_ate=data_nf_ate,
+                           lote_item_map=lote_item_map,
+                           cst_descricao=CST_DESCRICAO)
 
 
 @consulta_bp.route('/revisao')

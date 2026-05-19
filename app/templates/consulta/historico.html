@@ -22,7 +22,9 @@
           ('col-pis',           'PIS%'),
           ('col-cofins',        'COFINS%'),
           ('col-inconsistencia','Inconsistência'),
-          ('col-data',          'Data'),
+          ('col-data-nf',       'Data NF'),
+          ('col-valor-item',    'Valor Item'),
+          ('col-data',          'Data Consulta'),
         ] %}
         {% for col_id, col_label in col_labels %}
         <li>
@@ -123,11 +125,14 @@
         <th class="col-pis">PIS%</th>
         <th class="col-cofins">COFINS%</th>
         <th class="col-inconsistencia">Inconsistência</th>
-        <th class="col-data">Data</th>
+        <th class="col-data-nf">Data NF</th>
+        <th class="col-valor-item">Valor Item</th>
+        <th class="col-data">Data Consulta</th>
       </tr>
     </thead>
     <tbody>
       {% for c in consultas.items %}
+      {% set li = lote_item_map.get(c.id) %}
       <tr class="{% if c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
         <td class="font-monospace fw-bold col-ncm">
           <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">{{ c.ncm_consultado }}</a>
@@ -153,10 +158,12 @@
             <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
           {% else %}—{% endif %}
         </td>
+        <td class="col-data-nf"><small>{{ li.data_nf.strftime('%d/%m/%Y') if li and li.data_nf else '—' }}</small></td>
+        <td class="col-valor-item text-end"><small>{{ 'R$\xa0%.2f'|format(li.valor_item|float) if li and li.valor_item is not none else '—' }}</small></td>
         <td class="col-data"><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
       </tr>
       {% else %}
-      <tr><td colspan="10" class="text-center text-muted py-4">Nenhuma consulta encontrada.</td></tr>
+      <tr><td colspan="12" class="text-center text-muted py-4">Nenhuma consulta encontrada.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -191,7 +198,8 @@
 <script>
 const LS_KEY = 'tribsync_historico_cols';
 const ALL_COLS = ['col-ncm','col-empresa','col-produto','col-monofasico','col-grupo',
-                  'col-cst','col-pis','col-cofins','col-inconsistencia','col-data'];
+                  'col-cst','col-pis','col-cofins','col-inconsistencia',
+                  'col-data-nf','col-valor-item','col-data'];
 
 function applyColVisibility(hidden) {
   ALL_COLS.forEach(col => {
