@@ -18,6 +18,8 @@ GRUPOS = [
         'tabela_sped': '4.3.10',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'descricao': 'Autopeças e veículos sujeitos ao regime monofásico de PIS/COFINS.',
+        'cst_padrao_saida': '04',
+        'cst_padrao_entrada': '70',
     },
     {
         'codigo': 'G200',
@@ -26,6 +28,8 @@ GRUPOS = [
         'tabela_sped': '4.3.11',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/5786',
         'descricao': 'Combustíveis sujeitos ao regime monofásico.',
+        'cst_padrao_saida': '04',
+        'cst_padrao_entrada': '02',
     },
     {
         'codigo': 'G300',
@@ -34,6 +38,8 @@ GRUPOS = [
         'tabela_sped': '4.3.13',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'descricao': 'Produtos farmacêuticos e de higiene pessoal sujeitos ao regime monofásico.',
+        'cst_padrao_saida': '04',
+        'cst_padrao_entrada': '70',
     },
     {
         'codigo': 'G400',
@@ -42,6 +48,8 @@ GRUPOS = [
         'tabela_sped': '4.3.15',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1645',
         'descricao': 'Cervejas, refrigerantes, água mineral e outras bebidas frias.',
+        'cst_padrao_saida': '06',
+        'cst_padrao_entrada': '02',
     },
     {
         'codigo': 'G500',
@@ -50,6 +58,8 @@ GRUPOS = [
         'tabela_sped': '4.3.10',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'descricao': 'Pneus e câmaras de ar.',
+        'cst_padrao_saida': '04',
+        'cst_padrao_entrada': '70',
     },
     {
         'codigo': 'G600',
@@ -58,6 +68,8 @@ GRUPOS = [
         'tabela_sped': '4.3.12',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
         'descricao': 'Produtos sujeitos a PIS/COFINS por Substituição Tributária (CST 05).',
+        'cst_padrao_saida': '05',
+        'cst_padrao_entrada': '05',
     },
     {
         'codigo': 'G700',
@@ -66,6 +78,8 @@ GRUPOS = [
         'tabela_sped': '4.3.13',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'descricao': 'Alimentos básicos com PIS/COFINS a alíquota zero (CST 06) — Lei 10.925/2004.',
+        'cst_padrao_saida': '06',
+        'cst_padrao_entrada': '06',
     },
     {
         'codigo': 'G750',
@@ -74,6 +88,8 @@ GRUPOS = [
         'tabela_sped': '4.3.14',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
         'descricao': 'Livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
+        'cst_padrao_saida': '07',
+        'cst_padrao_entrada': '07',
     },
     {
         'codigo': 'G800',
@@ -82,6 +98,8 @@ GRUPOS = [
         'tabela_sped': '4.3.16',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
         'descricao': 'Insumos agropecuários com recolhimento de PIS/COFINS suspenso (CST 09).',
+        'cst_padrao_saida': '09',
+        'cst_padrao_entrada': '09',
     },
 ]
 
@@ -422,147 +440,153 @@ def register_commands(app):
 
     @app.cli.command('corrigir-sped')
     def corrigir_sped():
-        """Corrige classificações tributárias conforme validação SPED (Tab 4.3.x)."""
+        """Corrige classificações tributárias: migra schema, sincroniza CSTs e corrige grupos."""
+        from sqlalchemy import text
         atualizados = 0
 
-        # 1. Atualizar G700: Isenção → Alíquota Zero (CST 06, Tab 4.3.13)
+        # 1. Adicionar colunas cst_padrao ao banco (idempotente)
+        click.echo('1. Adicionando colunas cst_padrao ao banco...')
+        db.session.execute(text(
+            'ALTER TABLE grupos_tributarios '
+            'ADD COLUMN IF NOT EXISTS cst_padrao_saida VARCHAR(3)'
+        ))
+        db.session.execute(text(
+            'ALTER TABLE grupos_tributarios '
+            'ADD COLUMN IF NOT EXISTS cst_padrao_entrada VARCHAR(3)'
+        ))
+        db.session.commit()
+        click.echo('   Colunas adicionadas (ou já existiam).')
+
+        # 2. Sincronizar grupos: criar/atualizar todos conforme GRUPOS constant
+        click.echo('2. Sincronizando grupos tributários...')
+        grupos_map = {}
+        for g in GRUPOS:
+            existente = GrupoTributario.query.filter_by(codigo=g['codigo']).first()
+            if existente:
+                for campo in ('nome', 'lei_base', 'tabela_sped', 'url_tabela_sped',
+                              'descricao', 'cst_padrao_saida', 'cst_padrao_entrada'):
+                    setattr(existente, campo, g.get(campo))
+                grupos_map[g['codigo']] = existente.id
+            else:
+                novo = GrupoTributario(**g)
+                db.session.add(novo)
+                db.session.flush()
+                grupos_map[g['codigo']] = novo.id
+                click.echo(f'   Grupo criado: {g["codigo"]}')
+        db.session.commit()
+        click.echo('   Grupos atualizados.')
+
+        # 3. Correções estruturais: reclassificar NCMs em grupos errados
+        click.echo('3. Corrigindo NCMs em grupos incorretos...')
+
+        # Cap 31 (fertilizantes) pertence ao G700 (Alíquota Zero), não G800 (Suspensão)
         g700 = GrupoTributario.query.filter_by(codigo='G700').first()
-        if g700:
-            g700.nome = 'Alimentos Básicos — Alíquota Zero PIS/COFINS'
-            g700.tabela_sped = '4.3.13'
-            g700.lei_base = 'Lei nº 10.925/2004'
-            g700.descricao = 'Alimentos básicos com PIS/COFINS a alíquota zero (CST 06) — Lei 10.925/2004.'
-            g700.url_tabela_sped = 'http://sped.rfb.gov.br/arquivo/download/1643'
-            click.echo('  G700 atualizado: Alíquota Zero CST 06 (Tab 4.3.13)')
-
-        # 2. Criar G750: Livros → Isenção (CST 07, Tab 4.3.14)
-        g750 = GrupoTributario.query.filter_by(codigo='G750').first()
-        if not g750:
-            g750 = GrupoTributario(
-                codigo='G750',
-                nome='Livros e Publicações — Isenção PIS/COFINS',
-                lei_base='Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
-                tabela_sped='4.3.14',
-                url_tabela_sped='http://sped.rfb.gov.br/pasta/show/1616',
-                descricao='Livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
-            )
-            db.session.add(g750)
-            db.session.flush()
-            click.echo('  G750 criado: Livros — Isenção CST 07 (Tab 4.3.14)')
-
-        # 3. Mover livros (4901-4905) do G700 para G750 e corrigir alimentos para CST 06
-        livros_pos = {'4901', '4902', '4903', '4904', '4905'}
-        if g700 and g750:
-            ncms_g700 = NcmTributario.query.filter_by(
-                grupo_tributario_id=g700.id, ativo=True
-            ).all()
-            for r in ncms_g700:
-                if r.ncm in livros_pos:
-                    r.grupo_tributario_id = g750.id
-                    r.cst_saida = '07'
-                    r.cst_entrada = '07'
-                    atualizados += 1
-                elif r.cst_saida in ('07', None):
-                    r.cst_saida = '06'
-                    r.cst_entrada = '06'
-                    atualizados += 1
-            click.echo(f'  G700/G750: {atualizados} NCMs corrigidos (alimentos→CST06, livros→G750 CST07)')
-
-        # 4a. Migrar fertilizantes (cap 31) do G800 para G700 → CST 06
         g800 = GrupoTributario.query.filter_by(codigo='G800').first()
-        fertilizantes_pos = {'3101', '3102', '3103', '3104', '3105'}
-        corr_fert = 0
-        if g800 and g700:
-            for r in NcmTributario.query.filter_by(
-                grupo_tributario_id=g800.id, ativo=True
-            ).filter(NcmTributario.ncm.in_(fertilizantes_pos)).all():
+        if g700 and g800:
+            para_mover = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == g800.id,
+                NcmTributario.ativo == True,
+                NcmTributario.ncm.like('31%'),
+            ).all()
+            for r in para_mover:
                 r.grupo_tributario_id = g700.id
-                r.cst_saida = '06'
-                r.cst_entrada = '06'
-                corr_fert += 1
                 atualizados += 1
-            if corr_fert:
-                click.echo(f'  G800→G700: {corr_fert} fertilizantes cap 31 corrigidos para CST 06')
+            if para_mover:
+                click.echo(f'   G800→G700: {len(para_mover)} fertilizantes cap 31 migrados')
 
-        # 4b. Corrigir G400 (Bebidas Frias) varejista: CST 04 → CST 06 (Tab 4.3.13 code 918)
-        g400 = GrupoTributario.query.filter_by(codigo='G400').first()
-        corr_g400 = 0
-        if g400:
-            for r in NcmTributario.query.filter_by(
-                grupo_tributario_id=g400.id, ativo=True
-            ).filter(NcmTributario.cst_saida == '04').all():
-                r.cst_saida = '06'
-                corr_g400 += 1
+        # Cap 49 (livros/publicações) pertence ao G750 (Isenção), não G700 (Alíquota Zero)
+        g750 = GrupoTributario.query.filter_by(codigo='G750').first()
+        if g750 and g700:
+            para_mover = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == g700.id,
+                NcmTributario.ativo == True,
+                NcmTributario.ncm.like('49%'),
+            ).all()
+            for r in para_mover:
+                r.grupo_tributario_id = g750.id
                 atualizados += 1
-            if corr_g400:
-                click.echo(f'  G400: {corr_g400} NCMs bebidas frias corrigidos para CST 06')
+            if para_mover:
+                click.echo(f'   G700→G750: {len(para_mover)} livros cap 49 migrados')
 
-        # 5. Garantir CST 09 em todos os registros do G800 (Suspensão)
-        corr_g800 = 0
-        if g800:
-            for r in NcmTributario.query.filter_by(
-                grupo_tributario_id=g800.id, ativo=True
-            ).filter(db.or_(NcmTributario.cst_saida.is_(None),
-                             NcmTributario.cst_saida != '09')).all():
-                r.cst_saida = '09'
-                r.cst_entrada = '09'
-                corr_g800 += 1
-                atualizados += 1
-            if corr_g800:
-                click.echo(f'  G800: {corr_g800} NCMs corrigidos para CST 09')
-
-        # 6. Desativar NCMs cap 87 em G300 (Fármacos) — cap 87 = Veículos, não fármaco
+        # Cap 87 (veículos) não pertence ao G300 (Fármacos) — desativar
         g300 = GrupoTributario.query.filter_by(codigo='G300').first()
-        corr_g300 = 0
         if g300:
-            for r in NcmTributario.query.filter_by(
-                grupo_tributario_id=g300.id, ativo=True
-            ).filter(NcmTributario.ncm.like('87%')).all():
+            errados = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == g300.id,
+                NcmTributario.ativo == True,
+                NcmTributario.ncm.like('87%'),
+            ).all()
+            for r in errados:
                 r.ativo = False
-                corr_g300 += 1
                 atualizados += 1
-            if corr_g300:
-                click.echo(f'  G300: {corr_g300} NCMs cap 87 desativados (cap 87 não é fármaco)')
+            if errados:
+                click.echo(f'   G300: {len(errados)} NCMs cap 87 desativados (veículos ≠ fármacos)')
 
-        # 7. Desativar NCMs cap 88 em G800 — cap 88 = Aeronaves, não insumo agropecuário
-        corr_g800_88 = 0
+        # Cap 88 (aeronaves) não pertence ao G800 (Insumos Agro) — desativar
         if g800:
-            for r in NcmTributario.query.filter_by(
-                grupo_tributario_id=g800.id, ativo=True
-            ).filter(NcmTributario.ncm.like('88%')).all():
+            errados = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == g800.id,
+                NcmTributario.ativo == True,
+                NcmTributario.ncm.like('88%'),
+            ).all()
+            for r in errados:
                 r.ativo = False
-                corr_g800_88 += 1
                 atualizados += 1
-            if corr_g800_88:
-                click.echo(f'  G800: {corr_g800_88} NCMs cap 88 desativados (cap 88 = aeronaves)')
+            if errados:
+                click.echo(f'   G800: {len(errados)} NCMs cap 88 desativados (aeronaves ≠ insumos agro)')
 
-        # 8. Desativar NCMs cap 91 em G100 — cap 91 = Relógios, não autopeça
+        # Cap 91 (relógios) não pertence ao G100 (Autopeças) — desativar
         g100 = GrupoTributario.query.filter_by(codigo='G100').first()
-        corr_g100 = 0
         if g100:
-            for r in NcmTributario.query.filter_by(
-                grupo_tributario_id=g100.id, ativo=True
-            ).filter(NcmTributario.ncm.like('91%')).all():
+            errados = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == g100.id,
+                NcmTributario.ativo == True,
+                NcmTributario.ncm.like('91%'),
+            ).all()
+            for r in errados:
                 r.ativo = False
-                corr_g100 += 1
                 atualizados += 1
-            if corr_g100:
-                click.echo(f'  G100: {corr_g100} NCMs cap 91 desativados (cap 91 = relógios)')
+            if errados:
+                click.echo(f'   G100: {len(errados)} NCMs cap 91 desativados (relógios ≠ autopeças)')
 
+        db.session.commit()
+
+        # 4. Sincronizar CST de todos os NCMs com cst_padrao do seu grupo (tabela-driven)
+        click.echo('4. Sincronizando CST de todos os NCMs conforme cst_padrao do grupo...')
+        grupos_com_padrao = GrupoTributario.query.filter(
+            GrupoTributario.cst_padrao_saida.isnot(None)
+        ).all()
+        for grupo in grupos_com_padrao:
+            desatualizados = NcmTributario.query.filter(
+                NcmTributario.grupo_tributario_id == grupo.id,
+                NcmTributario.ativo == True,
+                db.or_(
+                    NcmTributario.cst_saida != grupo.cst_padrao_saida,
+                    NcmTributario.cst_entrada != grupo.cst_padrao_entrada,
+                    NcmTributario.cst_saida.is_(None),
+                    NcmTributario.cst_entrada.is_(None),
+                ),
+            ).all()
+            for r in desatualizados:
+                r.cst_saida = grupo.cst_padrao_saida
+                r.cst_entrada = grupo.cst_padrao_entrada
+                atualizados += 1
+            if desatualizados:
+                click.echo(
+                    f'   {grupo.codigo}: {len(desatualizados)} NCMs → '
+                    f'CST saída={grupo.cst_padrao_saida} / entrada={grupo.cst_padrao_entrada}'
+                )
         db.session.commit()
 
         log = LogAtualizacao(
             tabela_sped='correcao_sped',
-            versao='1.1',
+            versao='1.2',
             data_atualizacao_rfb=date.today(),
             data_importacao=datetime.now(timezone.utc),
             status='sucesso',
             registros_inseridos=0,
             registros_atualizados=atualizados,
-            mensagem=(
-                'Correção SPED: G700→CST06 Tab4.3.13, G750 criado CST07 Tab4.3.14, '
-                'G800→CST09, caps 87/88/91 corrigidos'
-            ),
+            mensagem='Correção SPED: cst_padrao por grupo + sync NCMs + caps incorretos desativados',
             executado_por='flask corrigir-sped',
         )
         db.session.add(log)

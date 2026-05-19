@@ -33,13 +33,24 @@ CST_DESCRICAO = {
     '99': 'Outras Operações',
 }
 
-# CST padrão por grupo quando cst_saida/cst_entrada não está preenchido no NcmTributario
-_CST_FALLBACK_GRUPO = {
-    'G600': '05',  # Substituição Tributária
-    'G700': '06',  # Alíquota Zero — Lei 10.925/2004
-    'G750': '07',  # Isenção — livros/publicações
-    'G800': '09',  # Suspensão — insumos agropecuários
-}
+def _cst_fallback(grupo, para_saida: bool) -> str:
+    """Retorna o CST padrão do grupo lido do banco. Nunca depende de dict hardcoded."""
+    if grupo is None:
+        return '01'
+    campo = 'cst_padrao_saida' if para_saida else 'cst_padrao_entrada'
+    valor = getattr(grupo, campo, None)
+    if valor:
+        return valor
+    # Fallback de emergência: derivar da tabela_sped armazenada no grupo
+    tabela = grupo.tabela_sped or ''
+    _por_tabela = {
+        '4.3.12': '05',  # ST
+        '4.3.13': '06',  # Alíquota Zero
+        '4.3.14': '07',  # Isenção
+        '4.3.15': '06' if para_saida else '02',  # Bebidas Frias
+        '4.3.16': '09',  # Suspensão
+    }
+    return _por_tabela.get(tabela, '04' if para_saida else '70')
 
 def derivar_cfop(grupo_nome: str | None, destino: str, tem_st: bool) -> str:
     """
@@ -187,21 +198,11 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
     if e_varejista:
         pis = float(registro.pis_aliquota_varejista or 0)
         cofins = float(registro.cofins_aliquota_varejista or 0)
-        if registro.cst_saida:
-            cst_sugerido = registro.cst_saida
-        elif not registro.monofasico and grupo:
-            cst_sugerido = _CST_FALLBACK_GRUPO.get(grupo.codigo, '01')
-        else:
-            cst_sugerido = '04'
+        cst_sugerido = registro.cst_saida or _cst_fallback(grupo, para_saida=True)
     else:
         pis = float(registro.pis_aliquota_fabricante or 0)
         cofins = float(registro.cofins_aliquota_fabricante or 0)
-        if registro.cst_entrada:
-            cst_sugerido = registro.cst_entrada
-        elif not registro.monofasico and grupo:
-            cst_sugerido = _CST_FALLBACK_GRUPO.get(grupo.codigo, '01')
-        else:
-            cst_sugerido = '02'
+        cst_sugerido = registro.cst_entrada or _cst_fallback(grupo, para_saida=False)
 
     cfop_sugerido = registro.cfop_saida_simples if empresa.regime_tributario == 'simples_nacional' else '5102'
 
