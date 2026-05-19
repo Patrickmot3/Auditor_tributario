@@ -33,24 +33,26 @@ CST_DESCRICAO = {
     '99': 'Outras Operações',
 }
 
+_TABELA_SPED_CST = {
+    # (cst_saida, cst_entrada) por tabela SPED — conhecimento regulatório estático
+    '4.3.10': ('04', '70'),  # Monofásico revenda/fabricante (autopeças, pneumáticos)
+    '4.3.11': ('04', '02'),  # Combustíveis
+    '4.3.12': ('05', '05'),  # Substituição Tributária
+    '4.3.13': ('06', '06'),  # Alíquota Zero — Lei 10.925/2004
+    '4.3.14': ('07', '07'),  # Isenção
+    '4.3.15': ('06', '02'),  # Bebidas Frias (varejista 06 / fabricante 02)
+    '4.3.16': ('09', '09'),  # Suspensão — insumos agropecuários
+}
+
+
 def _cst_fallback(grupo, para_saida: bool) -> str:
-    """Retorna o CST padrão do grupo lido do banco. Nunca depende de dict hardcoded."""
+    """Retorna CST padrão derivado de grupo.tabela_sped (lido do banco)."""
     if grupo is None:
         return '01'
-    campo = 'cst_padrao_saida' if para_saida else 'cst_padrao_entrada'
-    valor = getattr(grupo, campo, None)
-    if valor:
-        return valor
-    # Fallback de emergência: derivar da tabela_sped armazenada no grupo
-    tabela = grupo.tabela_sped or ''
-    _por_tabela = {
-        '4.3.12': '05',  # ST
-        '4.3.13': '06',  # Alíquota Zero
-        '4.3.14': '07',  # Isenção
-        '4.3.15': '06' if para_saida else '02',  # Bebidas Frias
-        '4.3.16': '09',  # Suspensão
-    }
-    return _por_tabela.get(tabela, '04' if para_saida else '70')
+    par = _TABELA_SPED_CST.get(grupo.tabela_sped or '')
+    if par:
+        return par[0] if para_saida else par[1]
+    return '04' if para_saida else '70'
 
 def derivar_cfop(grupo_nome: str | None, destino: str, tem_st: bool) -> str:
     """

@@ -18,8 +18,6 @@ GRUPOS = [
         'tabela_sped': '4.3.10',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'descricao': 'Autopeças e veículos sujeitos ao regime monofásico de PIS/COFINS.',
-        'cst_padrao_saida': '04',
-        'cst_padrao_entrada': '70',
     },
     {
         'codigo': 'G200',
@@ -28,8 +26,6 @@ GRUPOS = [
         'tabela_sped': '4.3.11',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/5786',
         'descricao': 'Combustíveis sujeitos ao regime monofásico.',
-        'cst_padrao_saida': '04',
-        'cst_padrao_entrada': '02',
     },
     {
         'codigo': 'G300',
@@ -38,8 +34,6 @@ GRUPOS = [
         'tabela_sped': '4.3.13',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'descricao': 'Produtos farmacêuticos e de higiene pessoal sujeitos ao regime monofásico.',
-        'cst_padrao_saida': '04',
-        'cst_padrao_entrada': '70',
     },
     {
         'codigo': 'G400',
@@ -48,8 +42,6 @@ GRUPOS = [
         'tabela_sped': '4.3.15',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1645',
         'descricao': 'Cervejas, refrigerantes, água mineral e outras bebidas frias.',
-        'cst_padrao_saida': '06',
-        'cst_padrao_entrada': '02',
     },
     {
         'codigo': 'G500',
@@ -58,8 +50,6 @@ GRUPOS = [
         'tabela_sped': '4.3.10',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1638',
         'descricao': 'Pneus e câmaras de ar.',
-        'cst_padrao_saida': '04',
-        'cst_padrao_entrada': '70',
     },
     {
         'codigo': 'G600',
@@ -68,8 +58,6 @@ GRUPOS = [
         'tabela_sped': '4.3.12',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
         'descricao': 'Produtos sujeitos a PIS/COFINS por Substituição Tributária (CST 05).',
-        'cst_padrao_saida': '05',
-        'cst_padrao_entrada': '05',
     },
     {
         'codigo': 'G700',
@@ -78,8 +66,6 @@ GRUPOS = [
         'tabela_sped': '4.3.13',
         'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'descricao': 'Alimentos básicos com PIS/COFINS a alíquota zero (CST 06) — Lei 10.925/2004.',
-        'cst_padrao_saida': '06',
-        'cst_padrao_entrada': '06',
     },
     {
         'codigo': 'G750',
@@ -88,8 +74,6 @@ GRUPOS = [
         'tabela_sped': '4.3.14',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
         'descricao': 'Livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
-        'cst_padrao_saida': '07',
-        'cst_padrao_entrada': '07',
     },
     {
         'codigo': 'G800',
@@ -98,8 +82,6 @@ GRUPOS = [
         'tabela_sped': '4.3.16',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
         'descricao': 'Insumos agropecuários com recolhimento de PIS/COFINS suspenso (CST 09).',
-        'cst_padrao_saida': '09',
-        'cst_padrao_entrada': '09',
     },
 ]
 
@@ -440,35 +422,33 @@ def register_commands(app):
 
     @app.cli.command('corrigir-sped')
     def corrigir_sped():
-        """Corrige classificações tributárias: migra schema, sincroniza CSTs e corrige grupos."""
-        from sqlalchemy import text
+        """Corrige classificações tributárias: sincroniza CSTs e corrige grupos."""
+        # CST correto por tabela_sped (knowledge regulatório — estático e oficial)
+        TABELA_SPED_CST = {
+            '4.3.10': ('04', '70'),  # Monofásico revenda/fabricante (autopeças, pneumáticos)
+            '4.3.11': ('04', '02'),  # Combustíveis
+            '4.3.12': ('05', '05'),  # Substituição Tributária
+            '4.3.13': ('06', '06'),  # Alíquota Zero — Lei 10.925/2004
+            '4.3.14': ('07', '07'),  # Isenção
+            '4.3.15': ('06', '02'),  # Bebidas Frias (varejista=06 / fabricante=02)
+            '4.3.16': ('09', '09'),  # Suspensão — insumos agropecuários
+        }
+        _campos_modelo = {'nome', 'lei_base', 'tabela_sped', 'url_tabela_sped', 'descricao'}
         atualizados = 0
 
-        # 1. Adicionar colunas cst_padrao ao banco (idempotente)
-        click.echo('1. Adicionando colunas cst_padrao ao banco...')
-        db.session.execute(text(
-            'ALTER TABLE grupos_tributarios '
-            'ADD COLUMN IF NOT EXISTS cst_padrao_saida VARCHAR(3)'
-        ))
-        db.session.execute(text(
-            'ALTER TABLE grupos_tributarios '
-            'ADD COLUMN IF NOT EXISTS cst_padrao_entrada VARCHAR(3)'
-        ))
-        db.session.commit()
-        click.echo('   Colunas adicionadas (ou já existiam).')
-
-        # 2. Sincronizar grupos: criar/atualizar todos conforme GRUPOS constant
-        click.echo('2. Sincronizando grupos tributários...')
+        # 1. Sincronizar grupos: criar/atualizar todos conforme GRUPOS constant
+        click.echo('1. Sincronizando grupos tributários...')
         grupos_map = {}
         for g in GRUPOS:
             existente = GrupoTributario.query.filter_by(codigo=g['codigo']).first()
             if existente:
-                for campo in ('nome', 'lei_base', 'tabela_sped', 'url_tabela_sped',
-                              'descricao', 'cst_padrao_saida', 'cst_padrao_entrada'):
-                    setattr(existente, campo, g.get(campo))
+                for campo in _campos_modelo:
+                    if campo in g:
+                        setattr(existente, campo, g[campo])
                 grupos_map[g['codigo']] = existente.id
             else:
-                novo = GrupoTributario(**g)
+                dados = {k: v for k, v in g.items() if k in _campos_modelo | {'codigo'}}
+                novo = GrupoTributario(**dados)
                 db.session.add(novo)
                 db.session.flush()
                 grupos_map[g['codigo']] = novo.id
@@ -476,12 +456,13 @@ def register_commands(app):
         db.session.commit()
         click.echo('   Grupos atualizados.')
 
-        # 3. Correções estruturais: reclassificar NCMs em grupos errados
-        click.echo('3. Corrigindo NCMs em grupos incorretos...')
+        # 2. Correções estruturais: reclassificar NCMs em grupos errados por capítulo NCM
+        click.echo('2. Corrigindo NCMs em grupos incorretos por capítulo...')
 
-        # Cap 31 (fertilizantes) pertence ao G700 (Alíquota Zero), não G800 (Suspensão)
         g700 = GrupoTributario.query.filter_by(codigo='G700').first()
         g800 = GrupoTributario.query.filter_by(codigo='G800').first()
+
+        # Cap 31 (fertilizantes) pertence ao G700 (Alíquota Zero), não G800 (Suspensão)
         if g700 and g800:
             para_mover = NcmTributario.query.filter(
                 NcmTributario.grupo_tributario_id == g800.id,
@@ -551,30 +532,31 @@ def register_commands(app):
 
         db.session.commit()
 
-        # 4. Sincronizar CST de todos os NCMs com cst_padrao do seu grupo (tabela-driven)
-        click.echo('4. Sincronizando CST de todos os NCMs conforme cst_padrao do grupo...')
-        grupos_com_padrao = GrupoTributario.query.filter(
-            GrupoTributario.cst_padrao_saida.isnot(None)
-        ).all()
-        for grupo in grupos_com_padrao:
+        # 3. Sincronizar CST de todos os NCMs usando tabela_sped do grupo (sem listas fixas)
+        click.echo('3. Sincronizando CST via tabela_sped do grupo...')
+        for grupo in GrupoTributario.query.filter(GrupoTributario.tabela_sped.isnot(None)).all():
+            par = TABELA_SPED_CST.get(grupo.tabela_sped)
+            if not par:
+                continue
+            cst_saida, cst_entrada = par
             desatualizados = NcmTributario.query.filter(
                 NcmTributario.grupo_tributario_id == grupo.id,
                 NcmTributario.ativo == True,
                 db.or_(
-                    NcmTributario.cst_saida != grupo.cst_padrao_saida,
-                    NcmTributario.cst_entrada != grupo.cst_padrao_entrada,
+                    NcmTributario.cst_saida != cst_saida,
+                    NcmTributario.cst_entrada != cst_entrada,
                     NcmTributario.cst_saida.is_(None),
                     NcmTributario.cst_entrada.is_(None),
                 ),
             ).all()
             for r in desatualizados:
-                r.cst_saida = grupo.cst_padrao_saida
-                r.cst_entrada = grupo.cst_padrao_entrada
+                r.cst_saida = cst_saida
+                r.cst_entrada = cst_entrada
                 atualizados += 1
             if desatualizados:
                 click.echo(
-                    f'   {grupo.codigo}: {len(desatualizados)} NCMs → '
-                    f'CST saída={grupo.cst_padrao_saida} / entrada={grupo.cst_padrao_entrada}'
+                    f'   {grupo.codigo} (Tab {grupo.tabela_sped}): '
+                    f'{len(desatualizados)} NCMs → saída={cst_saida} / entrada={cst_entrada}'
                 )
         db.session.commit()
 
@@ -586,7 +568,7 @@ def register_commands(app):
             status='sucesso',
             registros_inseridos=0,
             registros_atualizados=atualizados,
-            mensagem='Correção SPED: cst_padrao por grupo + sync NCMs + caps incorretos desativados',
+            mensagem='Correção SPED: sync CST por tabela_sped do grupo + caps incorretos desativados',
             executado_por='flask corrigir-sped',
         )
         db.session.add(log)

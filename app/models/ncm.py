@@ -12,8 +12,6 @@ class GrupoTributario(db.Model):
     tabela_sped = db.Column(db.String(50))
     url_tabela_sped = db.Column(db.Text)
     descricao = db.Column(db.Text)
-    cst_padrao_saida = db.Column(db.String(3))   # CST padrão de saída para todos os NCMs do grupo
-    cst_padrao_entrada = db.Column(db.String(3)) # CST padrão de entrada para todos os NCMs do grupo
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, onupdate=lambda: datetime.now(timezone.utc))
 
