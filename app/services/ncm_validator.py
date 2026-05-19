@@ -33,6 +33,14 @@ CST_DESCRICAO = {
     '99': 'Outras Operações',
 }
 
+# CST padrão por grupo quando cst_saida/cst_entrada não está preenchido no NcmTributario
+_CST_FALLBACK_GRUPO = {
+    'G600': '05',  # Substituição Tributária
+    'G700': '06',  # Alíquota Zero — Lei 10.925/2004
+    'G750': '07',  # Isenção — livros/publicações
+    'G800': '09',  # Suspensão — insumos agropecuários
+}
+
 def derivar_cfop(grupo_nome: str | None, destino: str, tem_st: bool) -> str:
     """
     Deriva o CFOP de saída conforme Ajuste SINIEF 07/2001.
@@ -179,11 +187,21 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
     if e_varejista:
         pis = float(registro.pis_aliquota_varejista or 0)
         cofins = float(registro.cofins_aliquota_varejista or 0)
-        cst_sugerido = registro.cst_saida or '04'
+        if registro.cst_saida:
+            cst_sugerido = registro.cst_saida
+        elif not registro.monofasico and grupo:
+            cst_sugerido = _CST_FALLBACK_GRUPO.get(grupo.codigo, '01')
+        else:
+            cst_sugerido = '04'
     else:
         pis = float(registro.pis_aliquota_fabricante or 0)
         cofins = float(registro.cofins_aliquota_fabricante or 0)
-        cst_sugerido = registro.cst_entrada or '02'
+        if registro.cst_entrada:
+            cst_sugerido = registro.cst_entrada
+        elif not registro.monofasico and grupo:
+            cst_sugerido = _CST_FALLBACK_GRUPO.get(grupo.codigo, '01')
+        else:
+            cst_sugerido = '02'
 
     cfop_sugerido = registro.cfop_saida_simples if empresa.regime_tributario == 'simples_nacional' else '5102'
 

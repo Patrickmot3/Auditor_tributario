@@ -61,11 +61,19 @@ GRUPOS = [
     },
     {
         'codigo': 'G700',
-        'nome': 'Alimentos Básicos e Livros — Isenção PIS/COFINS',
-        'lei_base': 'Lei nº 10.925/2004, Art. 150 CF/88',
+        'nome': 'Alimentos Básicos — Alíquota Zero PIS/COFINS',
+        'lei_base': 'Lei nº 10.925/2004',
+        'tabela_sped': '4.3.13',
+        'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
+        'descricao': 'Alimentos básicos com PIS/COFINS a alíquota zero (CST 06) — Lei 10.925/2004.',
+    },
+    {
+        'codigo': 'G750',
+        'nome': 'Livros e Publicações — Isenção PIS/COFINS',
+        'lei_base': 'Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
         'tabela_sped': '4.3.14',
         'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
-        'descricao': 'Alimentos básicos, livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
+        'descricao': 'Livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
     },
     {
         'codigo': 'G800',
@@ -129,14 +137,19 @@ LIVROS_ISENTOS = [
     ('4905', 'Obras cartográficas de qualquer espécie'),
 ]
 
-# ── Tabela 4.3.16 — Suspensão PIS/COFINS (CST 09) ────────────────────────────
-INSUMOS_SUSPENSAO = [
-    ('1209', 'Sementes, frutos e esporos para semeadura'),
+# ── Tabela 4.3.13 — Alíquota Zero PIS/COFINS (CST 06) — fertilizantes ────────
+# Cap 31 usa Lei 10.925/2004 (Tab 4.3.13), NÃO Tab 4.3.16 (suspensão)
+FERTILIZANTES_ALIQ_ZERO = [
     ('3101', 'Adubos de origem animal ou vegetal'),
     ('3102', 'Adubos minerais ou químicos nitrogenados'),
     ('3103', 'Adubos minerais ou químicos fosfatados'),
     ('3104', 'Adubos minerais ou químicos potássicos'),
     ('3105', 'Outros adubos e fertilizantes minerais ou químicos'),
+]
+
+# ── Tabela 4.3.16 — Suspensão PIS/COFINS (CST 09) ────────────────────────────
+INSUMOS_SUSPENSAO = [
+    ('1209', 'Sementes, frutos e esporos para semeadura'),
     ('3808', 'Inseticidas, rodenticidas, fungicidas, herbicidas e similares'),
 ]
 
@@ -235,12 +248,13 @@ def register_commands(app):
         db.session.commit()
         click.echo(f'  Fármacos/Perfumaria: {len(FARMACOS_PREFIXOS)} prefixos processados')
 
-        # --- Bebidas frias (prefixos) ---
+        # --- Bebidas frias (prefixos) — varejista CST 06 (Tab 4.3.13 code 918) ---
         g_beb = grupos_map['G400']
         for pref in BEBIDAS_PREFIXOS:
             ok = _criar_ncm(
                 pref, f'Bebida fria — prefixo {pref}', g_beb, 'posicao_4',
                 'Lei nº 13.097/2015', 1.86, 8.54, 0.0, 0.0,
+                cst_entrada='02', cst_saida='06',
             )
             if ok:
                 inseridos += 1
@@ -276,7 +290,7 @@ def register_commands(app):
             db.session.commit()
             click.echo(f'  ST (CST 05): {len(TABACO_ST)} posições processadas')
 
-        # --- G700 — Isenção PIS/COFINS (CST 07 / Tabela 4.3.14) ---
+        # --- G700 — Alíquota Zero PIS/COFINS (CST 06 / Tabela 4.3.13) ---
         g_isen = grupos_map.get('G700')
         if g_isen:
             lei_isen = 'Lei nº 10.925/2004'
@@ -285,24 +299,39 @@ def register_commands(app):
                 ok = _criar_ncm(
                     pref, desc, g_isen, 'prefixo', lei_isen,
                     0.0, 0.0, 0.0, 0.0,
-                    cst_entrada='07', cst_saida='07', monofasico=False,
+                    cst_entrada='06', cst_saida='06', monofasico=False,
                     vigencia=date(2004, 7, 23), fonte=fonte_isen,
                 )
                 if ok:
                     inseridos += 1
-            for pos, desc in LIVROS_ISENTOS:
+            for pos, desc in FERTILIZANTES_ALIQ_ZERO:
                 ok = _criar_ncm(
-                    pos, desc, g_isen, 'posicao_4',
-                    'Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
+                    pos, desc, g_isen, 'posicao_4', lei_isen,
                     0.0, 0.0, 0.0, 0.0,
-                    cst_entrada='07', cst_saida='07', monofasico=False,
-                    vigencia=date(2004, 1, 1),
-                    fonte='https://www.planalto.gov.br/ccivil_03/leis/2003/l10.833.htm',
+                    cst_entrada='06', cst_saida='06', monofasico=False,
+                    vigencia=date(2004, 7, 23), fonte=fonte_isen,
                 )
                 if ok:
                     inseridos += 1
             db.session.commit()
-            click.echo(f'  Isenção (CST 07): {len(ALIMENTOS_ISENTOS_PREFIXOS) + len(LIVROS_ISENTOS)} entradas processadas')
+            click.echo(f'  Alíquota Zero (CST 06): {len(ALIMENTOS_ISENTOS_PREFIXOS)} prefixos + {len(FERTILIZANTES_ALIQ_ZERO)} fertilizantes processados')
+
+        # --- G750 — Isenção PIS/COFINS (CST 07 / Tabela 4.3.14) ---
+        g_isen_livros = grupos_map.get('G750')
+        if g_isen_livros:
+            for pos, desc in LIVROS_ISENTOS:
+                ok = _criar_ncm(
+                    pos, desc, g_isen_livros, 'posicao_4',
+                    'Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
+                    0.0, 0.0, 0.0, 0.0,
+                    cst_entrada='07', cst_saida='07', monofasico=False,
+                    vigencia=date(1988, 10, 5),
+                    fonte='https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm',
+                )
+                if ok:
+                    inseridos += 1
+            db.session.commit()
+            click.echo(f'  Isenção (CST 07): {len(LIVROS_ISENTOS)} posições de livros processadas')
 
         # --- G800 — Suspensão PIS/COFINS (CST 09 / Tabela 4.3.16) ---
         g_susp = grupos_map.get('G800')
@@ -330,7 +359,8 @@ def register_commands(app):
             ('G400', 1.86,  8.54,  0.0, 0.0, date(2015,  1,  1), 'Lei nº 13.097/2015'),
             ('G500', 2.00,  9.50,  0.0, 0.0, date(2002,  1,  1), 'Lei nº 10.485/2002 — Art. 5º'),
             ('G600', 0.00,  0.00,  0.0, 0.0, date(1997, 12, 10), 'Lei nº 9.532/1997 (ST — CST 05)'),
-            ('G700', 0.00,  0.00,  0.0, 0.0, date(2004,  7, 23), 'Lei nº 10.925/2004 (Isenção — CST 07)'),
+            ('G700', 0.00,  0.00,  0.0, 0.0, date(2004,  7, 23), 'Lei nº 10.925/2004 (Alíquota Zero — CST 06)'),
+            ('G750', 0.00,  0.00,  0.0, 0.0, date(1988, 10,  5), 'Art. 150, VI, d CF/88 (Isenção — CST 07)'),
             ('G800', 0.00,  0.00,  0.0, 0.0, date(2004,  5, 30), 'Lei nº 10.865/2004 (Suspensão — CST 09)'),
         ]
         for cod, pis_f, cof_f, pis_v, cof_v, vig, lei in ALIQUOTAS_SEED:
@@ -389,6 +419,155 @@ def register_commands(app):
 
         click.echo(f'\nSeed concluído! Total de NCMs/posições inseridos: {inseridos}')
         click.echo('Login admin: admin@tribsync.com.br | Senha: TribSync@2026!')
+
+    @app.cli.command('corrigir-sped')
+    def corrigir_sped():
+        """Corrige classificações tributárias conforme validação SPED (Tab 4.3.x)."""
+        atualizados = 0
+
+        # 1. Atualizar G700: Isenção → Alíquota Zero (CST 06, Tab 4.3.13)
+        g700 = GrupoTributario.query.filter_by(codigo='G700').first()
+        if g700:
+            g700.nome = 'Alimentos Básicos — Alíquota Zero PIS/COFINS'
+            g700.tabela_sped = '4.3.13'
+            g700.lei_base = 'Lei nº 10.925/2004'
+            g700.descricao = 'Alimentos básicos com PIS/COFINS a alíquota zero (CST 06) — Lei 10.925/2004.'
+            g700.url_tabela_sped = 'http://sped.rfb.gov.br/arquivo/download/1643'
+            click.echo('  G700 atualizado: Alíquota Zero CST 06 (Tab 4.3.13)')
+
+        # 2. Criar G750: Livros → Isenção (CST 07, Tab 4.3.14)
+        g750 = GrupoTributario.query.filter_by(codigo='G750').first()
+        if not g750:
+            g750 = GrupoTributario(
+                codigo='G750',
+                nome='Livros e Publicações — Isenção PIS/COFINS',
+                lei_base='Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
+                tabela_sped='4.3.14',
+                url_tabela_sped='http://sped.rfb.gov.br/pasta/show/1616',
+                descricao='Livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
+            )
+            db.session.add(g750)
+            db.session.flush()
+            click.echo('  G750 criado: Livros — Isenção CST 07 (Tab 4.3.14)')
+
+        # 3. Mover livros (4901-4905) do G700 para G750 e corrigir alimentos para CST 06
+        livros_pos = {'4901', '4902', '4903', '4904', '4905'}
+        if g700 and g750:
+            ncms_g700 = NcmTributario.query.filter_by(
+                grupo_tributario_id=g700.id, ativo=True
+            ).all()
+            for r in ncms_g700:
+                if r.ncm in livros_pos:
+                    r.grupo_tributario_id = g750.id
+                    r.cst_saida = '07'
+                    r.cst_entrada = '07'
+                    atualizados += 1
+                elif r.cst_saida in ('07', None):
+                    r.cst_saida = '06'
+                    r.cst_entrada = '06'
+                    atualizados += 1
+            click.echo(f'  G700/G750: {atualizados} NCMs corrigidos (alimentos→CST06, livros→G750 CST07)')
+
+        # 4a. Migrar fertilizantes (cap 31) do G800 para G700 → CST 06
+        fertilizantes_pos = {'3101', '3102', '3103', '3104', '3105'}
+        corr_fert = 0
+        if g800 and g700:
+            for r in NcmTributario.query.filter_by(
+                grupo_tributario_id=g800.id, ativo=True
+            ).filter(NcmTributario.ncm.in_(fertilizantes_pos)).all():
+                r.grupo_tributario_id = g700.id
+                r.cst_saida = '06'
+                r.cst_entrada = '06'
+                corr_fert += 1
+                atualizados += 1
+            if corr_fert:
+                click.echo(f'  G800→G700: {corr_fert} fertilizantes cap 31 corrigidos para CST 06')
+
+        # 4b. Corrigir G400 (Bebidas Frias) varejista: CST 04 → CST 06 (Tab 4.3.13 code 918)
+        g400 = GrupoTributario.query.filter_by(codigo='G400').first()
+        corr_g400 = 0
+        if g400:
+            for r in NcmTributario.query.filter_by(
+                grupo_tributario_id=g400.id, ativo=True
+            ).filter(NcmTributario.cst_saida == '04').all():
+                r.cst_saida = '06'
+                corr_g400 += 1
+                atualizados += 1
+            if corr_g400:
+                click.echo(f'  G400: {corr_g400} NCMs bebidas frias corrigidos para CST 06')
+
+        # 5. Garantir CST 09 em todos os registros do G800 (Suspensão)
+        g800 = GrupoTributario.query.filter_by(codigo='G800').first()
+        corr_g800 = 0
+        if g800:
+            for r in NcmTributario.query.filter_by(
+                grupo_tributario_id=g800.id, ativo=True
+            ).filter(db.or_(NcmTributario.cst_saida.is_(None),
+                             NcmTributario.cst_saida != '09')).all():
+                r.cst_saida = '09'
+                r.cst_entrada = '09'
+                corr_g800 += 1
+                atualizados += 1
+            if corr_g800:
+                click.echo(f'  G800: {corr_g800} NCMs corrigidos para CST 09')
+
+        # 6. Desativar NCMs cap 87 em G300 (Fármacos) — cap 87 = Veículos, não fármaco
+        g300 = GrupoTributario.query.filter_by(codigo='G300').first()
+        corr_g300 = 0
+        if g300:
+            for r in NcmTributario.query.filter_by(
+                grupo_tributario_id=g300.id, ativo=True
+            ).filter(NcmTributario.ncm.like('87%')).all():
+                r.ativo = False
+                corr_g300 += 1
+                atualizados += 1
+            if corr_g300:
+                click.echo(f'  G300: {corr_g300} NCMs cap 87 desativados (cap 87 não é fármaco)')
+
+        # 7. Desativar NCMs cap 88 em G800 — cap 88 = Aeronaves, não insumo agropecuário
+        corr_g800_88 = 0
+        if g800:
+            for r in NcmTributario.query.filter_by(
+                grupo_tributario_id=g800.id, ativo=True
+            ).filter(NcmTributario.ncm.like('88%')).all():
+                r.ativo = False
+                corr_g800_88 += 1
+                atualizados += 1
+            if corr_g800_88:
+                click.echo(f'  G800: {corr_g800_88} NCMs cap 88 desativados (cap 88 = aeronaves)')
+
+        # 8. Desativar NCMs cap 91 em G100 — cap 91 = Relógios, não autopeça
+        g100 = GrupoTributario.query.filter_by(codigo='G100').first()
+        corr_g100 = 0
+        if g100:
+            for r in NcmTributario.query.filter_by(
+                grupo_tributario_id=g100.id, ativo=True
+            ).filter(NcmTributario.ncm.like('91%')).all():
+                r.ativo = False
+                corr_g100 += 1
+                atualizados += 1
+            if corr_g100:
+                click.echo(f'  G100: {corr_g100} NCMs cap 91 desativados (cap 91 = relógios)')
+
+        db.session.commit()
+
+        log = LogAtualizacao(
+            tabela_sped='correcao_sped',
+            versao='1.1',
+            data_atualizacao_rfb=date.today(),
+            data_importacao=datetime.now(timezone.utc),
+            status='sucesso',
+            registros_inseridos=0,
+            registros_atualizados=atualizados,
+            mensagem=(
+                'Correção SPED: G700→CST06 Tab4.3.13, G750 criado CST07 Tab4.3.14, '
+                'G800→CST09, caps 87/88/91 corrigidos'
+            ),
+            executado_por='flask corrigir-sped',
+        )
+        db.session.add(log)
+        db.session.commit()
+        click.echo(f'\nCorreção SPED concluída! {atualizados} registros atualizados.')
 
     @app.cli.command('corrigir-etanol')
     def corrigir_etanol():
