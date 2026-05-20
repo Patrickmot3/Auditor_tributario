@@ -628,7 +628,12 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
     try:
         grupos = GrupoTributario.query.filter_by(tabela_sped=tabela_id).all()
         if not grupos:
-            raise Exception(f'Nenhum grupo tributário encontrado para tabela {tabela_id}')
+            return {
+                'status': 'sem_grupo',
+                'mensagem': f'Tabela {tabela_id} sem grupo tributário associado — ignorada.',
+                'inseridos': 0,
+                'atualizados': 0,
+            }
 
         resp = _get_com_retry(info['url_download'])
         conteudo = resp.content

@@ -144,6 +144,8 @@ def atualizacao_executar_todas():
         if resultado.get('status') == 'sucesso':
             total_ins += resultado.get('inseridos', 0)
             total_atu += resultado.get('atualizados', 0)
+        elif resultado.get('status') == 'sem_grupo':
+            pass  # tabela sem grupo ativo — ignorar silenciosamente
         else:
             erros += 1
             flash(f'Erro na tabela {tabela}: {resultado.get("mensagem")}', 'danger')
