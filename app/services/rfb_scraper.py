@@ -35,13 +35,13 @@ TABELAS_SPED = {
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1642',
         'nome': 'Substituição Tributária (CST 05)',
     },
-    # 4.3.13 — Fármacos e Perfumaria / Alíquota Zero (CST 06)
+    # 4.3.13 — Alíquota Zero (CST 06): alimentos básicos e livros (Lei 10.925/2004)
     '4.3.13': {
         'url_download': 'http://sped.rfb.gov.br/arquivo/download/1643',
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1643',
-        'nome': 'Alíquota Zero — Fármacos e Perfumaria (CST 06)',
+        'nome': 'Alíquota Zero — Alimentos Básicos e Livros (CST 06)',
     },
-    # 4.3.14 — Isenção PIS/COFINS (CST 07)
+    # 4.3.14 — Isenção PIS/COFINS (CST 07) — sem grupo ativo no momento
     '4.3.14': {
         'url_download': 'http://sped.rfb.gov.br/arquivo/download/1646',
         'url_show': 'http://sped.rfb.gov.br/arquivo/show/1646',
@@ -354,23 +354,63 @@ def _extrair_ncms_zip_xml(conteudo: bytes) -> list[tuple[str, str]]:
     return resultado
 
 
-# Capítulos TIPI válidos por código de tabela SPED (regime monofásico)
-# Nota: no banco de produção, "Bebidas Frias" está associada à tabela 4.3.15 (não 4.3.11)
-# pois o seed original usou essa numeração.  4.3.11 no banco = "Combustíveis e Derivados".
-_CAPITULOS_VALIDOS = {
-    '4.3.10': {'40', '68', '70', '73', '83', '84', '85', '87', '90', '91', '94'},  # Autopeças
-    '4.3.13': {'30', '33', '34', '35', '38', '40', '48', '84', '85', '87', '89', '90'},  # Fármacos/Perfumaria
-    '4.3.15': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias — chave conforme banco
-    # 4.3.11, 4.3.12, 4.3.14, 4.3.16: abrangem múltiplos capítulos, sem restrição por capítulo
+# CST correto (saída, entrada, monofasico) por tabela SPED — base para inserção de novos NCMs.
+_CST_POR_TABELA: dict[str, tuple[str, str, bool]] = {
+    '4.3.10': ('04', '70', True),   # Monofásico revenda/fabricante (autopeças, fármacos)
+    '4.3.11': ('04', '02', True),   # Combustíveis
+    '4.3.12': ('05', '05', False),  # Substituição Tributária
+    '4.3.13': ('06', '06', False),  # Alíquota Zero — alimentos, livros (Lei 10.925/2004)
+    '4.3.14': ('07', '07', False),  # Isenção (fallback)
+    '4.3.15': ('06', '02', True),   # Bebidas Frias
+    '4.3.16': ('09', '09', False),  # Suspensão — insumos agropecuários
 }
 
-# Posições TIPI (4 dígitos) excluídas por tabela — mais específico que _CAPITULOS_VALIDOS.
-# Necessário quando o capítulo é válido mas certas posições NÃO pertencem ao regime.
+# Capítulos TIPI válidos por código de tabela SPED.
+# 4.3.10 abrange monofásico completo: autopeças (Lei 10.485/2002) + fármacos (Lei 10.147/2000).
+# 4.3.13 abrange alíquota zero: alimentos básicos + fertilizantes (cap 31) + livros (cap 49).
+_CAPITULOS_VALIDOS = {
+    '4.3.10': {
+        # Fármacos e Perfumaria — Lei 10.147/2000
+        '30', '33', '34', '35', '38',
+        # Autopeças e veículos — Lei 10.485/2002 Anexos I e II
+        '40', '68', '70', '73', '83', '84', '85', '87', '90', '94',
+    },
+    '4.3.13': {
+        # Alimentos básicos — Lei 10.925/2004 (caps 01–11)
+        '01', '02', '03', '04', '07', '08', '10', '11',
+        # Fertilizantes e insumos afins (cap 31) — alíquota zero (não suspensão)
+        '31',
+        # Livros, jornais e periódicos (cap 49) — Lei 10.925/2004 art. 9°, IX
+        '49',
+    },
+    '4.3.15': {'21', '22', '39', '70', '73', '76'},  # Bebidas Frias
+    # 4.3.11, 4.3.12, 4.3.14, 4.3.16: sem restrição por capítulo
+}
+
+# Mapeamento capítulo/posição TIPI → código do grupo, para tabelas compartilhadas por múltiplos grupos.
+# Usado em _grupo_para_ncm() quando filter_by(tabela_sped) retorna mais de um grupo.
+_CAPITULO_PARA_GRUPO = {
+    '4.3.10': {
+        # Capítulos de Fármacos/Perfumaria → G300
+        '30': 'G300', '33': 'G300', '34': 'G300', '35': 'G300', '38': 'G300',
+        # Default (caps de autopeças) → G100; pneumáticos (4011/4013) → G500 por posição
+    },
+    '4.3.13': {
+        # Cap 49 (livros/jornais) → G750; tudo mais (alimentos) → G700
+        '49': 'G750',
+    },
+}
+
+# Posições TIPI (4 dígitos) com grupo específico dentro de uma tabela compartilhada.
+_POSICAO_PARA_GRUPO = {
+    '4.3.10': {
+        '4011': 'G500', '4013': 'G500',  # Pneumáticos → G500
+    },
+}
+
+# Posições TIPI (4 dígitos) excluídas por tabela.
 _POSICOES_EXCLUIDAS = {
-    # 2207 = Álcool etílico / Etanol: capítulo 22 está na lista de Bebidas Frias, mas
-    # 2207 é combustível (Lei 9.718/98) — não bebida fria.
-    # 2209 = Vinagres: também capítulo 22 mas não sujeito ao regime de Bebidas Frias.
-    # Chave '4.3.15' conforme tabela grupos_tributarios do banco de produção.
+    # 2207 = Etanol combustível (Lei 9.718/98) e 2209 = Vinagres — não são Bebidas Frias.
     '4.3.15': {'2207', '2209'},
 }
 
@@ -426,40 +466,51 @@ def _ncm_valido(ncm_raw: str, tabela_id: str) -> bool:
 
 # ─── Persistência ─────────────────────────────────────────────────────────────
 
-def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[int, int]:
+def _grupo_para_ncm(ncm: str, tabela_id: str, grupos: list) -> 'GrupoTributario':
+    """
+    Retorna o grupo tributário correto para um NCM quando múltiplos grupos
+    compartilham a mesma tabela_sped (ex.: G100/G300/G500 em 4.3.10 e G700/G750 em 4.3.13).
+    Prioridade: posição 4d > capítulo 2d > primeiro grupo (default).
+    """
+    if len(grupos) == 1:
+        return grupos[0]
+
+    grupos_por_codigo = {g.codigo: g for g in grupos}
+
+    # Roteamento por posição TIPI (4 dígitos) — mais específico
+    mapa_posicao = _POSICAO_PARA_GRUPO.get(tabela_id, {})
+    codigo_pos = mapa_posicao.get(ncm[:4])
+    if codigo_pos and codigo_pos in grupos_por_codigo:
+        return grupos_por_codigo[codigo_pos]
+
+    # Roteamento por capítulo TIPI (2 dígitos)
+    mapa_cap = _CAPITULO_PARA_GRUPO.get(tabela_id, {})
+    codigo_cap = mapa_cap.get(ncm[:2])
+    if codigo_cap and codigo_cap in grupos_por_codigo:
+        return grupos_por_codigo[codigo_cap]
+
+    return grupos[0]
+
+
+def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupos: list) -> tuple[int, int]:
     from app.models.base_tributaria import AliquotaGrupo
 
-    # Desativar NCMs já cadastrados neste grupo que pertencem a posições excluídas
-    # (podem ter sido importados antes da regra de exclusão existir)
+    # CST e monofasico corretos derivados da tabela SPED — nunca hardcoded
+    cst_saida, cst_entrada, monofasico = _CST_POR_TABELA.get(tabela_id, ('04', '70', True))
+
+    # Desativar NCMs em posições excluídas para todos os grupos desta tabela
     posicoes_excluidas = _POSICOES_EXCLUIDAS.get(tabela_id)
     if posicoes_excluidas:
-        registros_ativos = NcmTributario.query.filter_by(
-            grupo_tributario_id=grupo.id, ativo=True
-        ).all()
-        desativados = 0
-        for reg in registros_ativos:
-            if reg.ncm[:4] in posicoes_excluidas:
-                reg.ativo = False
-                reg.updated_at = datetime.now(timezone.utc)
-                desativados += 1
-        if desativados:
-            logger.info(
-                f'Tabela {tabela_id}: {desativados} NCM(s) desativados '
-                f'(posições excluídas: {posicoes_excluidas})'
+        for grupo in grupos:
+            registros_ativos = NcmTributario.query.filter_by(
+                grupo_tributario_id=grupo.id, ativo=True
+            ).all()
+            desativados = sum(
+                1 for r in registros_ativos
+                if r.ncm[:4] in posicoes_excluidas and not setattr(r, 'ativo', False)  # noqa: B010
             )
-
-    # Busca alíquota vigente no banco; usa fallback hardcoded apenas se não houver
-    aliquota = AliquotaGrupo.vigente_para(grupo.id)
-    pis_fab = float(aliquota.pis_fabricante) if aliquota else 1.5
-    cofins_fab = float(aliquota.cofins_fabricante) if aliquota else 7.0
-    pis_var = float(aliquota.pis_varejista) if aliquota else 0.0
-    cofins_var = float(aliquota.cofins_varejista) if aliquota else 0.0
-
-    if not aliquota:
-        logger.warning(
-            f'Tabela {tabela_id}: nenhuma AliquotaGrupo vigente para grupo {grupo.id}. '
-            'Usando valores padrão hardcoded.'
-        )
+            if desativados:
+                logger.info(f'Tabela {tabela_id} / {grupo.codigo}: {desativados} NCM(s) desativados')
 
     inseridos = atualizados = rejeitados = 0
     for ncm_raw, descricao in pares:
@@ -467,12 +518,26 @@ def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[i
             rejeitados += 1
             continue
 
+        grupo = _grupo_para_ncm(ncm_raw, tabela_id, grupos)
+
+        # Alíquotas vigentes do grupo correto
+        aliquota = AliquotaGrupo.vigente_para(grupo.id)
+        pis_fab    = float(aliquota.pis_fabricante)  if aliquota else 0.0
+        cofins_fab = float(aliquota.cofins_fabricante) if aliquota else 0.0
+        pis_var    = float(aliquota.pis_varejista)   if aliquota else 0.0
+        cofins_var = float(aliquota.cofins_varejista)  if aliquota else 0.0
+        if not aliquota:
+            logger.warning(f'Tabela {tabela_id} / {grupo.codigo}: sem AliquotaGrupo vigente — usando 0,0.')
+
         tipo_ref = 'ncm_exato' if len(ncm_raw) == 8 else f'posicao_{len(ncm_raw)}'
         existente = NcmTributario.query.filter_by(
             ncm=ncm_raw, grupo_tributario_id=grupo.id,
         ).first()
         if existente:
             existente.descricao = descricao
+            existente.cst_saida = cst_saida
+            existente.cst_entrada = cst_entrada
+            existente.monofasico = monofasico
             existente.updated_at = datetime.now(timezone.utc)
             atualizados += 1
         else:
@@ -480,11 +545,11 @@ def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[i
                 ncm=ncm_raw,
                 descricao=descricao,
                 grupo_tributario_id=grupo.id,
-                monofasico=True,
+                monofasico=monofasico,
                 tipo_referencia=tipo_ref,
                 lei=grupo.lei_base,
-                cst_entrada='70',
-                cst_saida='04',
+                cst_entrada=cst_entrada,
+                cst_saida=cst_saida,
                 cfop_entrada_simples='1102',
                 cfop_saida_simples='5102',
                 pis_aliquota_fabricante=pis_fab,
@@ -498,7 +563,7 @@ def _salvar_ncms(pares: list[tuple[str, str]], tabela_id: str, grupo) -> tuple[i
             inseridos += 1
 
     if rejeitados:
-        logger.info(f'Tabela {tabela_id}: {rejeitados} NCMs rejeitados por validação de capítulo/formato')
+        logger.info(f'Tabela {tabela_id}: {rejeitados} NCMs rejeitados por validação')
     db.session.commit()
     return inseridos, atualizados
 
@@ -561,9 +626,9 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
     mensagem = ''
 
     try:
-        grupo = GrupoTributario.query.filter_by(tabela_sped=tabela_id).first()
-        if not grupo:
-            raise Exception(f'Grupo tributário para tabela {tabela_id} não encontrado')
+        grupos = GrupoTributario.query.filter_by(tabela_sped=tabela_id).all()
+        if not grupos:
+            raise Exception(f'Nenhum grupo tributário encontrado para tabela {tabela_id}')
 
         resp = _get_com_retry(info['url_download'])
         conteudo = resp.content
@@ -603,9 +668,10 @@ def atualizar_tabela(tabela_id, executado_por='scheduler_auto'):
             logger.error(f'Tabela {tabela_id}: preview do conteúdo recebido → {preview!r}')
             raise Exception(f'Nenhum NCM extraído da tabela {tabela_id}. Último erro: {ultimo_erro}')
 
-        inseridos, atualizados = _salvar_ncms(pares, tabela_id, grupo)
+        inseridos, atualizados = _salvar_ncms(pares, tabela_id, grupos)
+        nomes_grupos = ', '.join(g.codigo for g in grupos)
         status = 'sucesso'
-        mensagem = f'Tabela {tabela_id} ({fmt}): {inseridos} inseridos, {atualizados} atualizados'
+        mensagem = f'Tabela {tabela_id} ({fmt}) [{nomes_grupos}]: {inseridos} inseridos, {atualizados} atualizados'
         logger.info(mensagem)
 
     except Exception as e:

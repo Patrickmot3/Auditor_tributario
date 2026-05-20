@@ -31,9 +31,9 @@ GRUPOS = [
         'codigo': 'G300',
         'nome': 'Fármacos e Perfumaria',
         'lei_base': 'Lei nº 10.147/2000',
-        'tabela_sped': '4.3.13',
-        'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
-        'descricao': 'Produtos farmacêuticos e de higiene pessoal sujeitos ao regime monofásico.',
+        'tabela_sped': '4.3.10',
+        'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1638',
+        'descricao': 'Produtos farmacêuticos e de higiene pessoal sujeitos ao regime monofásico (CST 04 varejista / CST 02 fabricante).',
     },
     {
         'codigo': 'G400',
@@ -69,11 +69,11 @@ GRUPOS = [
     },
     {
         'codigo': 'G750',
-        'nome': 'Livros e Publicações — Isenção PIS/COFINS',
-        'lei_base': 'Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
-        'tabela_sped': '4.3.14',
-        'url_tabela_sped': 'http://sped.rfb.gov.br/pasta/show/1616',
-        'descricao': 'Livros, jornais e periódicos isentos de PIS/COFINS (CST 07).',
+        'nome': 'Livros e Publicações — Alíquota Zero PIS/COFINS',
+        'lei_base': 'Lei nº 10.925/2004, art. 9º, IX e Art. 150, VI, d CF/88',
+        'tabela_sped': '4.3.13',
+        'url_tabela_sped': 'http://sped.rfb.gov.br/arquivo/download/1643',
+        'descricao': 'Livros, jornais e periódicos com PIS/COFINS a alíquota zero (CST 06) — Lei 10.925/2004 art. 9º, IX.',
     },
     {
         'codigo': 'G800',
@@ -90,7 +90,7 @@ AUTOPECAS_POSICOES = [
     '4016', '6813', '7007', '7009', '7320', '8301', '8302', '8407', '8408',
     '8409', '8413', '8414', '8415', '8421', '8431', '8433', '8481', '8483',
     '8505', '8507', '8511', '8512', '8527', '8536', '8539', '8544', '8706',
-    '8707', '8708', '9029', '9030', '9032', '9104', '9401',
+    '8707', '8708', '9029', '9030', '9032', '9401',
 ]
 
 COMBUSTIVEIS = [
@@ -117,7 +117,7 @@ TABACO_ST = [
     ('2403', 'Outros produtos de tabaco e sucedâneos manufaturados'),
 ]
 
-# ── Tabela 4.3.14 — Isenção PIS/COFINS (CST 07) ──────────────────────────────
+# ── Tabela 4.3.13 — Alíquota Zero PIS/COFINS (CST 06) — alimentos básicos ──
 ALIMENTOS_ISENTOS_PREFIXOS = [
     ('01', 'Animais vivos'),
     ('02', 'Carnes e miudezas comestíveis'),
@@ -316,22 +316,22 @@ def register_commands(app):
             db.session.commit()
             click.echo(f'  Alíquota Zero (CST 06): {len(ALIMENTOS_ISENTOS_PREFIXOS)} prefixos + {len(FERTILIZANTES_ALIQ_ZERO)} fertilizantes processados')
 
-        # --- G750 — Isenção PIS/COFINS (CST 07 / Tabela 4.3.14) ---
+        # --- G750 — Alíquota Zero PIS/COFINS (CST 06 / Tabela 4.3.13) ---
         g_isen_livros = grupos_map.get('G750')
         if g_isen_livros:
             for pos, desc in LIVROS_ISENTOS:
                 ok = _criar_ncm(
                     pos, desc, g_isen_livros, 'posicao_4',
-                    'Art. 150, VI, d CF/88 e Lei nº 10.833/2003',
+                    'Lei nº 10.925/2004, art. 9º, IX e Art. 150, VI, d CF/88',
                     0.0, 0.0, 0.0, 0.0,
-                    cst_entrada='07', cst_saida='07', monofasico=False,
+                    cst_entrada='06', cst_saida='06', monofasico=False,
                     vigencia=date(1988, 10, 5),
                     fonte='https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm',
                 )
                 if ok:
                     inseridos += 1
             db.session.commit()
-            click.echo(f'  Isenção (CST 07): {len(LIVROS_ISENTOS)} posições de livros processadas')
+            click.echo(f'  Alíquota Zero livros (CST 06): {len(LIVROS_ISENTOS)} posições processadas')
 
         # --- G800 — Suspensão PIS/COFINS (CST 09 / Tabela 4.3.16) ---
         g_susp = grupos_map.get('G800')
@@ -475,7 +475,7 @@ def register_commands(app):
             if para_mover:
                 click.echo(f'   G800→G700: {len(para_mover)} fertilizantes cap 31 migrados')
 
-        # Cap 49 (livros/publicações) pertence ao G750 (Isenção), não G700 (Alíquota Zero)
+        # Cap 49 (livros/publicações) pertence ao G750 (Alíquota Zero), não G700 (Alimentos)
         g750 = GrupoTributario.query.filter_by(codigo='G750').first()
         if g750 and g700:
             para_mover = NcmTributario.query.filter(
@@ -528,7 +528,7 @@ def register_commands(app):
                 r.ativo = False
                 atualizados += 1
             if errados:
-                click.echo(f'   G100: {len(errados)} NCMs cap 91 desativados (relógios ≠ autopeças)')
+                click.echo(f'   G100: {len(errados)} NCMs cap 91 desativados (relogios != autopecas)')
 
         db.session.commit()
 

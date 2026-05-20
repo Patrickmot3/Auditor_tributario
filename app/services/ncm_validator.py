@@ -38,8 +38,8 @@ _TABELA_SPED_CST = {
     '4.3.10': ('04', '70'),  # Monofásico revenda/fabricante (autopeças, pneumáticos)
     '4.3.11': ('04', '02'),  # Combustíveis
     '4.3.12': ('05', '05'),  # Substituição Tributária
-    '4.3.13': ('06', '06'),  # Alíquota Zero — Lei 10.925/2004
-    '4.3.14': ('07', '07'),  # Isenção
+    '4.3.13': ('06', '06'),  # Alíquota Zero — alimentos, livros (Lei 10.925/2004)
+    '4.3.14': ('07', '07'),  # Isenção — fallback de segurança (nenhum grupo usa atualmente)
     '4.3.15': ('06', '02'),  # Bebidas Frias (varejista 06 / fabricante 02)
     '4.3.16': ('09', '09'),  # Suspensão — insumos agropecuários
 }
