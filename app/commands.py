@@ -358,14 +358,18 @@ def register_commands(app):
         ALIQUOTAS_SEED = [
             # (codigo_grupo, pis_fab, cofins_fab, pis_var, cofins_var, vigencia_inicio, lei)
             ('G100', 1.50,  7.00,  0.0, 0.0, date(2002,  1,  1), 'Lei nº 10.485/2002 — Anexos I e II'),
-            # G200: valores ad rem (R$/m³), não percentuais — referência aproximada até MP vigente
+            # G200: valores ad rem (R$/m³), não percentuais
             ('G200', 0.00,  0.00,  0.0, 0.0, date(1998,  1,  1), 'Lei nº 9.718/1998, Art. 4º; Lei nº 10.336/2001 — regime ad rem (R$/m³); valores atualizados por MP'),
             # G300 lista positiva (fármacos): PIS 2,1% / COFINS 9,9%
             ('G300', 2.10,  9.90,  0.0, 0.0, date(2000,  1,  1), 'Lei nº 10.147/2000 — lista positiva (fármacos)'),
-            ('G400', 1.86,  8.54,  0.0, 0.0, date(2015,  1,  1), 'Lei nº 13.097/2015'),
+            # G400: água mineral (subcategorias inseridas em bloco separado abaixo)
+            ('G400', 1.86,  8.54,  0.0, 0.0, date(2015,  1,  1), 'Lei nº 13.097/2015 — água mineral e água de mesa'),
             ('G500', 2.00,  9.50,  0.0, 0.0, date(2002,  1,  1), 'Lei nº 10.485/2002 — Art. 5º'),
             ('G600', 0.00,  0.00,  0.0, 0.0, date(1997, 12, 10), 'Legislação específica por produto — ST PIS/COFINS (CST 05)'),
             ('G700', 0.00,  0.00,  0.0, 0.0, date(2004,  7, 23), 'Lei nº 10.925/2004 (Alíquota Zero — CST 06)'),
+            # G750 linha 1: imunidade constitucional ICMS/IPI (CF/88)
+            ('G750', 0.00,  0.00,  0.0, 0.0, date(1988, 10,  5), 'Art. 150, VI, d CF/88'),
+            # G750 linha 2: alíquota zero PIS/COFINS (Lei 10.865/2004)
             ('G750', 0.00,  0.00,  0.0, 0.0, date(2004,  5,  3), 'Lei nº 10.865/2004, Art. 28, VIII (Alíquota Zero — CST 06)'),
             ('G800', 0.00,  0.00,  0.0, 0.0, date(2004,  7, 23), 'Lei nº 10.925/2004, Art. 9º (doméstico) e Lei nº 10.865/2004 (importação) — Suspensão CST 09'),
         ]
@@ -395,25 +399,41 @@ def register_commands(app):
         g300_id = grupos_map.get('G300')
         if g300_id:
             _lei_perf = 'Lei nº 10.147/2000 — lista negativa (perfumaria e higiene pessoal)'
-            existe_perf = AliquotaGrupo.query.filter_by(
-                grupo_tributario_id=g300_id,
-                lei_referencia=_lei_perf,
-            ).first()
-            if not existe_perf:
+            if not AliquotaGrupo.query.filter_by(grupo_tributario_id=g300_id, lei_referencia=_lei_perf).first():
                 db.session.add(AliquotaGrupo(
                     grupo_tributario_id=g300_id,
-                    pis_fabricante=2.20,
-                    cofins_fabricante=10.30,
-                    pis_varejista=0.0,
-                    cofins_varejista=0.0,
-                    vigencia_inicio=date(2000, 1, 1),
-                    vigencia_fim=None,
+                    pis_fabricante=2.20, cofins_fabricante=10.30,
+                    pis_varejista=0.0, cofins_varejista=0.0,
+                    vigencia_inicio=date(2000, 1, 1), vigencia_fim=None,
                     lei_referencia=_lei_perf,
-                    observacao='Lista negativa — perfumaria, cosméticos e higiene pessoal (cap. 3303–3307, 3401). Alíquota diferente da lista positiva (fármacos).',
+                    observacao='Lista negativa — perfumaria, cosméticos e higiene pessoal (cap. 3303–3307, 3401). PIS 2,2% / COFINS 10,3%.',
                     ativo=True,
                 ))
                 db.session.commit()
-                click.echo('  G300 perfumaria (lista negativa) inserida: PIS 2,2% / COFINS 10,3%')
+                click.echo('  G300 perfumaria (lista negativa) inserida.')
+
+        # G400 subcategorias de bebidas frias (Lei 13.097/2015)
+        g400_id = grupos_map.get('G400')
+        if g400_id:
+            G400_SUBCATS = [
+                (2.32, 10.68, 'Lei nº 13.097/2015 — refrigerantes',
+                 'Refrigerantes (colas, sucos, isotônicos, energéticos). Lei 13.097/2015.'),
+                (2.99, 13.77, 'Lei nº 13.097/2015 — cerveja',
+                 'Cervejas de malte. Lei 13.097/2015.'),
+                (3.06, 14.10, 'Lei nº 13.097/2015 — chope',
+                 'Chope. Lei 13.097/2015.'),
+            ]
+            for pis, cof, lei, obs in G400_SUBCATS:
+                if not AliquotaGrupo.query.filter_by(grupo_tributario_id=g400_id, lei_referencia=lei).first():
+                    db.session.add(AliquotaGrupo(
+                        grupo_tributario_id=g400_id,
+                        pis_fabricante=pis, cofins_fabricante=cof,
+                        pis_varejista=0.0, cofins_varejista=0.0,
+                        vigencia_inicio=date(2015, 1, 1), vigencia_fim=None,
+                        lei_referencia=lei, observacao=obs, ativo=True,
+                    ))
+                    click.echo(f'  G400 {lei.split("—")[-1].strip()} inserido.')
+            db.session.commit()
 
         click.echo('  Alíquotas iniciais por grupo criadas.')
 
@@ -608,133 +628,186 @@ def register_commands(app):
 
     @app.cli.command('corrigir-aliquotas')
     def corrigir_aliquotas():
-        """Corrige lei_referencia e observacao das AliquotaGrupo implantadas com dados errados."""
-        atualizados = 0
+        """Corrige AliquotaGrupo com dados legais errados — idempotente."""
+        atualizados = inseridos = excluidos = 0
 
-        # Mapeamento: codigo_grupo → correções a aplicar nos registros existentes
-        CORRECOES = {
-            'G200': {
-                'lei_old': ['Lei nº 9.718/1998', 'Lei nº 9.718/1998 (ad rem — R$/m³)'],
-                'lei_new': 'Lei nº 9.718/1998, Art. 4º; Lei nº 10.336/2001 — regime ad rem (R$/m³); valores atualizados por MP',
-                'obs_new': 'Atenção: alíquotas ad rem (R$/m³ ou R$/litro), não percentuais. Os campos pis_fabricante/cofins_fabricante não representam % mas servem de referência enquanto o regime ad rem não for implementado no modelo.',
-                'pis_fab': None,  # não altera o valor numérico
-                'cof_fab': None,
-            },
-            'G300': {
-                # Corrige a entrada existente para deixar claro que é lista positiva
-                'lei_old': ['Lei nº 10.147/2000', 'Lei nº 10.147/2000 (Monofásico — CST 04)'],
-                'lei_new': 'Lei nº 10.147/2000 — lista positiva (fármacos)',
-                'obs_new': 'Fármacos da lista positiva (cap. 30, 3001–3004): PIS 2,1% / COFINS 9,9%. Para perfumaria/higiene (lista negativa 3303–3307, 3401) ver registro separado.',
-                'pis_fab': None,
-                'cof_fab': None,
-            },
-            'G600': {
-                'lei_old': ['Lei nº 9.532/1997 (ST — CST 05)', 'Lei nº 9.532/1997 e Lei nº 12.715/2012'],
-                'lei_new': 'Legislação específica por produto — ST PIS/COFINS (CST 05)',
-                'obs_new': 'Não há lei geral para ST de PIS/COFINS — cada produto tem legislação própria. Ex.: tabaco: Lei 9.715/1998. (Lei 9.532/1997 refere-se a IRPJ/CSLL, não a PIS/COFINS.)',
-                'pis_fab': None,
-                'cof_fab': None,
-            },
-            'G700': {
-                'lei_old': ['Isenção CST 07', 'Lei nº 10.925/2004 (Isenção — CST 07)', 'Art. 150, VI, d CF/88 (Isenção — CST 07)'],
-                'lei_new': 'Lei nº 10.925/2004 (Alíquota Zero — CST 06)',
-                'obs_new': 'CST correto é 06 (alíquota zero), não 07 (isenção). O sistema já aplica CST 06 nos processamentos de lote.',
-                'pis_fab': None,
-                'cof_fab': None,
-            },
-            'G750': {
-                'lei_old': [
-                    'Art. 150, VI, d CF/88 (Isenção — CST 07)',
-                    'Lei nº 10.925/2004, art. 9º, IX e Art. 150, VI, d CF/88',
-                    'Art. 150 VI d CF/88',
-                ],
-                'lei_new': 'Lei nº 10.865/2004, Art. 28, VIII (Alíquota Zero — CST 06)',
-                'obs_new': 'O Art. 150, VI, d CF/88 confere imunidade de ICMS e IPI sobre livros, não de PIS/COFINS. Para as contribuições, a alíquota zero está na Lei 10.865/2004, Art. 28, VIII (CST 06).',
-                'pis_fab': None,
-                'cof_fab': None,
-            },
-            'G800': {
-                'lei_old': [
-                    'Lei nº 10.865/2004 (Suspensão — CST 09)',
-                    'Lei nº 10.865/2004 e Decreto nº 5.630/2005',
-                ],
-                'lei_new': 'Lei nº 10.925/2004, Art. 9º (doméstico) e Lei nº 10.865/2004 (importação) — Suspensão CST 09',
-                'obs_new': 'Operações domésticas: Lei 10.925/2004, Art. 9º. Importações: Lei 10.865/2004 e Decreto 5.630/2005.',
-                'pis_fab': None,
-                'cof_fab': None,
-            },
-        }
-
-        click.echo('Corrigindo AliquotaGrupo — lei_referencia e observacao...')
-        for cod, corr in CORRECOES.items():
-            grupo = GrupoTributario.query.filter_by(codigo=cod).first()
-            if not grupo:
-                click.echo(f'  {cod}: grupo não encontrado, pulando.')
-                continue
-            registros = AliquotaGrupo.query.filter_by(grupo_tributario_id=grupo.id).all()
-            for r in registros:
-                if r.lei_referencia in corr['lei_old'] or any(
-                    old.lower() in (r.lei_referencia or '').lower() for old in corr['lei_old']
-                ):
-                    r.lei_referencia = corr['lei_new']
-                    r.observacao = corr['obs_new']
-                    if corr.get('pis_fab') is not None:
-                        r.pis_fabricante = corr['pis_fab']
-                    if corr.get('cof_fab') is not None:
-                        r.cofins_fabricante = corr['cof_fab']
-                    atualizados += 1
-                    click.echo(f'  {cod}: atualizado (id={r.id})')
-        db.session.commit()
-
-        # G300 lista negativa (perfumaria) — adiciona se não existir
+        # ── 1. G300: corrige registro com alíquotas de perfumaria rotulado como fármacos ──
+        # Causa: corrigir-aliquotas anterior usava match por substring "Lei nº 10.147/2000"
+        # e acabava renomeando também o registro de perfumaria para "lista positiva".
         g300 = GrupoTributario.query.filter_by(codigo='G300').first()
         if g300:
-            _lei_perf = 'Lei nº 10.147/2000 — lista negativa (perfumaria e higiene pessoal)'
-            existe_perf = AliquotaGrupo.query.filter_by(
-                grupo_tributario_id=g300.id,
-                lei_referencia=_lei_perf,
-            ).first()
-            if not existe_perf:
+            _lei_pos = 'Lei nº 10.147/2000 — lista positiva (fármacos)'
+            _lei_neg = 'Lei nº 10.147/2000 — lista negativa (perfumaria e higiene pessoal)'
+            _obs_neg = 'Lista negativa — perfumaria, cosméticos e higiene pessoal (cap. 3303–3307, 3401). PIS 2,2% / COFINS 10,3%.'
+            todos_g300 = AliquotaGrupo.query.filter_by(grupo_tributario_id=g300.id).all()
+            # Corrige registros com alíquota ≥ 2,15% rotulados como "lista positiva"
+            for r in todos_g300:
+                if float(r.pis_fabricante or 0) >= 2.15 and 'lista positiva' in (r.lei_referencia or '').lower():
+                    r.lei_referencia = _lei_neg
+                    r.observacao = _obs_neg
+                    atualizados += 1
+                    click.echo(f'  G300: aliquota 2,2% rotulada errado → corrigida para lista negativa (id={r.id})')
+            db.session.commit()
+            # Remove duplicatas: mantém apenas 1 registro por rótulo
+            for lei_keep in [_lei_pos, _lei_neg]:
+                dups = (AliquotaGrupo.query
+                        .filter_by(grupo_tributario_id=g300.id, lei_referencia=lei_keep)
+                        .order_by(AliquotaGrupo.id).all())
+                for r in dups[1:]:
+                    db.session.delete(r)
+                    excluidos += 1
+                    click.echo(f'  G300: duplicata removida (id={r.id})')
+            db.session.commit()
+            # Garante que lista negativa existe
+            if not AliquotaGrupo.query.filter_by(grupo_tributario_id=g300.id, lei_referencia=_lei_neg).first():
                 db.session.add(AliquotaGrupo(
                     grupo_tributario_id=g300.id,
-                    pis_fabricante=2.20,
-                    cofins_fabricante=10.30,
-                    pis_varejista=0.0,
-                    cofins_varejista=0.0,
-                    vigencia_inicio=date(2000, 1, 1),
-                    vigencia_fim=None,
-                    lei_referencia=_lei_perf,
-                    observacao='Lista negativa — perfumaria, cosméticos e higiene pessoal (cap. 3303–3307, 3401). PIS 2,2% / COFINS 10,3% — diferente da lista positiva (fármacos: PIS 2,1% / COFINS 9,9%).',
-                    ativo=True,
+                    pis_fabricante=2.20, cofins_fabricante=10.30,
+                    pis_varejista=0.0, cofins_varejista=0.0,
+                    vigencia_inicio=date(2000, 1, 1), vigencia_fim=None,
+                    lei_referencia=_lei_neg, observacao=_obs_neg, ativo=True,
                 ))
                 db.session.commit()
-                click.echo('  G300: registro de perfumaria (lista negativa) inserido.')
-                atualizados += 1
+                inseridos += 1
+                click.echo('  G300: lista negativa inserida.')
 
-        # Sincroniza lei_base dos grupos conforme constante GRUPOS atualizada
-        click.echo('Sincronizando lei_base dos GrupoTributario...')
+        # ── 2. G400: adiciona subcategorias e rotula água mineral ──
+        g400 = GrupoTributario.query.filter_by(codigo='G400').first()
+        if g400:
+            # Rotula o registro existente de água mineral (PIS ≈ 1,86%)
+            agua = (AliquotaGrupo.query.filter_by(grupo_tributario_id=g400.id)
+                    .filter(AliquotaGrupo.pis_fabricante.between(1.80, 1.92)).first())
+            if agua and 'água' not in (agua.lei_referencia or '').lower():
+                agua.lei_referencia = 'Lei nº 13.097/2015 — água mineral e água de mesa'
+                agua.observacao = 'Bebidas frias: água mineral. Lei 13.097/2015.'
+                atualizados += 1
+                click.echo('  G400: água mineral rotulado.')
+            G400_SUBCATS = [
+                (2.32, 10.68, 'Lei nº 13.097/2015 — refrigerantes',
+                 'Refrigerantes (colas, sucos, isotônicos, energéticos). Lei 13.097/2015.'),
+                (2.99, 13.77, 'Lei nº 13.097/2015 — cerveja',
+                 'Cervejas de malte. Lei 13.097/2015.'),
+                (3.06, 14.10, 'Lei nº 13.097/2015 — chope',
+                 'Chope. Lei 13.097/2015.'),
+            ]
+            for pis, cof, lei, obs in G400_SUBCATS:
+                if not AliquotaGrupo.query.filter_by(grupo_tributario_id=g400.id, lei_referencia=lei).first():
+                    db.session.add(AliquotaGrupo(
+                        grupo_tributario_id=g400.id,
+                        pis_fabricante=pis, cofins_fabricante=cof,
+                        pis_varejista=0.0, cofins_varejista=0.0,
+                        vigencia_inicio=date(2015, 1, 1), vigencia_fim=None,
+                        lei_referencia=lei, observacao=obs, ativo=True,
+                    ))
+                    inseridos += 1
+                    click.echo(f'  G400: {lei.split("—")[-1].strip()} inserido.')
+            db.session.commit()
+
+        # ── 3. G600: remove qualquer referência à Lei 9.532/1997 (IR/CSLL, não PIS/COFINS) ──
+        g600 = GrupoTributario.query.filter_by(codigo='G600').first()
+        if g600:
+            _lei_600 = 'Legislação específica por produto — ST PIS/COFINS (CST 05)'
+            _obs_600 = ('Não há lei geral para ST de PIS/COFINS — cada produto tem legislação própria. '
+                        'Ex.: tabaco: Lei 9.715/1998. (Lei 9.532/1997 refere-se a IRPJ/CSLL, não a PIS/COFINS.)')
+            for r in AliquotaGrupo.query.filter_by(grupo_tributario_id=g600.id).all():
+                if '9.532' in (r.lei_referencia or '') or '9532' in (r.lei_referencia or ''):
+                    r.lei_referencia = _lei_600
+                    r.observacao = _obs_600
+                    atualizados += 1
+                    click.echo(f'  G600: Lei 9.532 removida (id={r.id})')
+            g600.lei_base = 'Legislação específica por produto — CST 05 (ex.: tabaco: Lei nº 9.715/1998)'
+            db.session.commit()
+
+        # ── 4. G700: "Isenção CST 07" → "Alíquota Zero CST 06" ──
+        g700 = GrupoTributario.query.filter_by(codigo='G700').first()
+        if g700:
+            for r in AliquotaGrupo.query.filter_by(grupo_tributario_id=g700.id).all():
+                lei_lower = (r.lei_referencia or '').lower()
+                if 'cst 07' in lei_lower or 'cst07' in lei_lower or 'isen' in lei_lower:
+                    r.lei_referencia = 'Lei nº 10.925/2004 (Alíquota Zero — CST 06)'
+                    r.observacao = 'CST correto é 06 (alíquota zero), não 07 (isenção). O sistema aplica CST 06 nos processamentos de lote.'
+                    atualizados += 1
+                    click.echo(f'  G700: CST 07→06 corrigido (id={r.id})')
+            db.session.commit()
+
+        # ── 5. G750: dois registros com bases legais distintas por vigência ──
+        # vigência 1988 → CF/88 (imunidade ICMS/IPI)
+        # vigência 2004 → Lei 10.865/2004 (alíquota zero PIS/COFINS)
+        g750 = GrupoTributario.query.filter_by(codigo='G750').first()
+        if g750:
+            _lei_cf88 = 'Art. 150, VI, d CF/88'
+            _obs_cf88 = ('Imunidade constitucional de ICMS e IPI sobre livros, jornais e periódicos '
+                         '(CF/88, Art. 150, VI, d). Para PIS/COFINS a alíquota zero decorre da Lei 10.865/2004, Art. 28, VIII.')
+            _lei_10865 = 'Lei nº 10.865/2004, Art. 28, VIII (Alíquota Zero — CST 06)'
+            _obs_10865 = 'Alíquota zero de PIS/COFINS sobre livros, jornais e periódicos. Lei 10.865/2004, Art. 28, VIII (CST 06).'
+            # Corrige o registro de 1988: não deve referenciar Lei 10.865/2004
+            row_1988 = AliquotaGrupo.query.filter_by(
+                grupo_tributario_id=g750.id, vigencia_inicio=date(1988, 10, 5)
+            ).first()
+            if row_1988:
+                if '10.865' in (row_1988.lei_referencia or '') or row_1988.lei_referencia != _lei_cf88:
+                    row_1988.lei_referencia = _lei_cf88
+                    row_1988.observacao = _obs_cf88
+                    atualizados += 1
+                    click.echo(f'  G750: vigência 1988 → CF/88 (id={row_1988.id})')
+            else:
+                db.session.add(AliquotaGrupo(
+                    grupo_tributario_id=g750.id,
+                    pis_fabricante=0.0, cofins_fabricante=0.0,
+                    pis_varejista=0.0, cofins_varejista=0.0,
+                    vigencia_inicio=date(1988, 10, 5), vigencia_fim=None,
+                    lei_referencia=_lei_cf88, observacao=_obs_cf88, ativo=True,
+                ))
+                inseridos += 1
+                click.echo('  G750: registro CF/88 (1988) inserido.')
+            # Garante o registro de 2004 com a lei correta
+            row_2004 = AliquotaGrupo.query.filter_by(
+                grupo_tributario_id=g750.id, vigencia_inicio=date(2004, 5, 3)
+            ).first()
+            if row_2004:
+                if row_2004.lei_referencia != _lei_10865:
+                    row_2004.lei_referencia = _lei_10865
+                    row_2004.observacao = _obs_10865
+                    atualizados += 1
+                    click.echo(f'  G750: vigência 2004 → Lei 10.865/2004 (id={row_2004.id})')
+            else:
+                db.session.add(AliquotaGrupo(
+                    grupo_tributario_id=g750.id,
+                    pis_fabricante=0.0, cofins_fabricante=0.0,
+                    pis_varejista=0.0, cofins_varejista=0.0,
+                    vigencia_inicio=date(2004, 5, 3), vigencia_fim=None,
+                    lei_referencia=_lei_10865, observacao=_obs_10865, ativo=True,
+                ))
+                inseridos += 1
+                click.echo('  G750: registro Lei 10.865/2004 (2004) inserido.')
+            db.session.commit()
+
+        # ── 6. Sincroniza lei_base/descricao de todos os grupos ──
         for g in GRUPOS:
             existente = GrupoTributario.query.filter_by(codigo=g['codigo']).first()
             if existente:
                 existente.lei_base = g['lei_base']
                 existente.descricao = g['descricao']
         db.session.commit()
-        click.echo('  lei_base e descricao dos grupos atualizados.')
+        click.echo('  Grupos sincronizados.')
 
         log = LogAtualizacao(
             tabela_sped='correcao_aliquotas',
-            versao='1.0',
+            versao='2.0',
             data_atualizacao_rfb=date.today(),
             data_importacao=datetime.now(timezone.utc),
             status='sucesso',
-            registros_inseridos=0,
+            registros_inseridos=inseridos,
             registros_atualizados=atualizados,
-            mensagem='Correção de lei_referencia/observacao: G200 ad rem, G300 dual lista, G600 lei errada, G700 CST 07→06, G750 CF/88→10.865/2004, G800 lei doméstica',
+            mensagem=(
+                f'G300 duplicata corrigida; G400 +3 subcats bebidas; '
+                f'G600 Lei 9.532→especifica; G700 CST 07→06; G750 CF/88 vs 10.865/2004 separados'
+            ),
             executado_por='flask corrigir-aliquotas',
         )
         db.session.add(log)
         db.session.commit()
-        click.echo(f'\ncorrigir-aliquotas concluído! {atualizados} registros corrigidos/inseridos.')
+        click.echo(f'\ncorrigir-aliquotas v2 concluido! atualizados={atualizados} inseridos={inseridos} excluidos={excluidos}')
 
     @app.cli.command('corrigir-etanol')
     def corrigir_etanol():
