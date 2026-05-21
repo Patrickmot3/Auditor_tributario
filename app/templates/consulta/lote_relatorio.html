@@ -81,7 +81,13 @@
 <div class="card mb-3">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span><i class="bi bi-file-earmark-zip"></i> Arquivo: <strong>{{ relatorio.arquivo_origem }}</strong></span>
-    <span class="badge bg-primary">{{ relatorio.notas | rejectattr('erro') | list | length }} NF-e(s) processada(s)</span>
+    <div class="d-flex align-items-center gap-3">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="filtroSoCnae">
+        <label class="form-check-label small text-muted" for="filtroSoCnae">Só críticas CNAE</label>
+      </div>
+      <span class="badge bg-primary">{{ relatorio.notas | rejectattr('erro') | list | length }} NF-e(s) processada(s)</span>
+    </div>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
@@ -96,13 +102,18 @@
             <th class="text-center">Itens</th>
             <th class="text-center">Exceção PIS/COFINS</th>
             <th class="text-center">Inconsistências</th>
+            <th class="text-center">Crítica CNAE</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
           {% for nota in relatorio.notas if not nota.erro %}
           {% set nota_idx = loop.index %}
-          <tr {% if nota.erro %}class="table-danger"{% elif nota.inconsistencias %}class="table-warning"{% endif %}>
+          {% set criticas_cnae = nota.get('criticas_cnae', 0) %}
+          {% set alertas_cnae  = nota.get('alertas_cnae', 0) %}
+          <tr class="{% if criticas_cnae > 0 %}table-danger{% elif nota.inconsistencias %}table-warning{% endif %}"
+              data-tem-critica-cnae="{{ '1' if criticas_cnae > 0 else '0' }}"
+              data-expand-target="itens-nota-{{ nota_idx }}">
             <td class="text-center">
               {% if nota.itens %}
               <button class="btn btn-sm p-0 border-0 text-muted toggle-itens"
@@ -125,6 +136,13 @@
             <td class="text-center">
               {% if nota.inconsistencias %}<span class="badge bg-warning text-dark">{{ nota.inconsistencias }}</span>{% else %}—{% endif %}
             </td>
+            <td class="text-center">
+              {% if criticas_cnae > 0 %}
+                <span class="badge bg-danger"><i class="bi bi-shield-exclamation"></i> {{ criticas_cnae }}</span>
+              {% elif alertas_cnae > 0 %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-shield-check"></i> {{ alertas_cnae }}</span>
+              {% else %}—{% endif %}
+            </td>
             <td>
               {% if nota.erro %}
                 <span class="badge bg-danger">
@@ -137,7 +155,7 @@
           </tr>
           {% if nota.itens %}
           <tr id="itens-nota-{{ nota_idx }}" class="d-none">
-            <td colspan="9" class="p-0 bg-light">
+            <td colspan="10" class="p-0 bg-light">
               <div class="px-4 py-2">
                 <table class="table table-xs table-sm mb-0 border">
                   <thead class="table-secondary">
@@ -150,11 +168,13 @@
                       <th>Grupo Tributário</th>
                       <th>Base Legal</th>
                       <th>Inconsistência</th>
+                      <th>Crítica CNAE</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for item in nota.itens %}
-                    <tr class="{% if item.cst_sugerido in ('02','03','04') %}{% if item.inconsistencia %}table-warning{% else %}table-success{% endif %}{% elif item.cst_sugerido == '05' %}{% if item.inconsistencia %}table-warning{% else %}table-primary{% endif %}{% endif %}">
+                    {% set cc = item.get('critica_cnae', {}) %}
+                    <tr class="{% if cc.get('severidade') == 'CRITICA' %}table-danger{% elif cc.get('severidade') == 'ALERTA' %}table-warning{% elif item.cst_sugerido in ('02','03','04') %}{% if item.inconsistencia %}table-warning{% else %}table-success{% endif %}{% elif item.cst_sugerido == '05' %}{% if item.inconsistencia %}table-warning{% else %}table-primary{% endif %}{% endif %}">
                       <td class="font-monospace small">{{ item.ncm }}</td>
                       <td><small>{{ item.descricao or '—' }}</small></td>
                       <td class="font-monospace small">{{ item.cst_atual or '—' }}</td>
@@ -174,6 +194,17 @@
                           <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> CST divergente</span>
                         {% elif not item.grupo %}
                           <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> NCM não localizado</span>
+                        {% else %}—{% endif %}
+                      </td>
+                      <td>
+                        {% if cc.get('severidade') == 'CRITICA' %}
+                          <span class="badge bg-danger" title="{{ cc.get('mensagem','') }}">
+                            <i class="bi bi-shield-exclamation"></i> Crítica
+                          </span>
+                        {% elif cc.get('severidade') == 'ALERTA' %}
+                          <span class="badge bg-warning text-dark" title="{{ cc.get('mensagem','') }}">
+                            <i class="bi bi-shield-check"></i> Alerta
+                          </span>
                         {% else %}—{% endif %}
                       </td>
                     </tr>
@@ -201,6 +232,8 @@
     ('Inconsistências', relatorio.inconsistencias, 'warning', 'exclamation-triangle'),
     ('Duplicados (atualizados)', relatorio.duplicados, 'info', 'arrow-repeat'),
     ('Erros', relatorio.erros, 'secondary', 'bug'),
+    ('Críticas CNAE', relatorio.get('total_criticas_cnae', 0), 'danger', 'shield-exclamation'),
+    ('Alertas CNAE', relatorio.get('total_alertas_cnae', 0), 'warning', 'shield-check'),
   ] %}
   {% for label, valor, cor, icon in cards %}
   <div class="col-sm-4 col-lg-2">
@@ -236,12 +269,14 @@
         <th>Grupo Tributário</th>
         <th>Base Legal</th>
         <th>Inconsistência</th>
+        <th>Crítica CNAE</th>
         {% if tipo == 'excel' %}<th>Status</th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for item in relatorio.itens %}
-      <tr class="{% if item.status == 'erro' %}table-danger{% elif item.cst_sugerido in ('02','03','04') %}{% if item.inconsistencia %}table-warning{% else %}table-success{% endif %}{% elif item.cst_sugerido == '05' %}{% if item.inconsistencia %}table-warning{% else %}table-primary{% endif %}{% endif %}">
+      {% set cc = item.get('critica_cnae', {}) %}
+      <tr class="{% if item.status == 'erro' %}table-danger{% elif cc.get('severidade') == 'CRITICA' %}table-danger{% elif cc.get('severidade') == 'ALERTA' %}table-warning{% elif item.cst_sugerido in ('02','03','04') %}{% if item.inconsistencia %}table-warning{% else %}table-success{% endif %}{% elif item.cst_sugerido == '05' %}{% if item.inconsistencia %}table-warning{% else %}table-primary{% endif %}{% endif %}">
         <td class="font-monospace">{{ item.ncm }}</td>
         {% if tipo == 'excel' %}
           <td class="font-monospace small">{{ item.codigo or '—' }}</td>
@@ -264,6 +299,17 @@
             <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> CST divergente</span>
           {% elif not item.grupo %}
             <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> NCM não localizado</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if cc.get('severidade') == 'CRITICA' %}
+            <span class="badge bg-danger" title="{{ cc.get('mensagem','') }}">
+              <i class="bi bi-shield-exclamation"></i> Crítica
+            </span>
+          {% elif cc.get('severidade') == 'ALERTA' %}
+            <span class="badge bg-warning text-dark" title="{{ cc.get('mensagem','') }}">
+              <i class="bi bi-shield-check"></i> Alerta
+            </span>
           {% else %}—{% endif %}
         </td>
         {% if tipo == 'excel' %}
@@ -301,5 +347,17 @@ document.querySelectorAll('.toggle-itens').forEach(btn => {
     }
   });
 });
+
+const filtroSoCnae = document.getElementById('filtroSoCnae');
+if (filtroSoCnae) {
+  filtroSoCnae.addEventListener('change', function () {
+    document.querySelectorAll('tr[data-tem-critica-cnae]').forEach(tr => {
+      const show = !this.checked || tr.dataset.temCriticaCnae === '1';
+      tr.classList.toggle('d-none', !show);
+      const expandId = tr.dataset.expandTarget;
+      if (expandId) document.getElementById(expandId)?.classList.add('d-none');
+    });
+  });
+}
 </script>
 {% endblock %}

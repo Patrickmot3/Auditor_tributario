@@ -32,6 +32,9 @@ class Empresa(db.Model):
     email = db.Column(db.String(150))
     responsavel_nome = db.Column(db.String(150))
     responsavel_cpf = db.Column(db.String(14))
+    cnaes_secundarios  = db.Column(db.JSON, nullable=True)   # list[str]
+    segmentos_override = db.Column(db.JSON, nullable=True)   # list[str] — grupos adicionados manualmente
+    segmentos_inferidos = db.Column(db.JSON, nullable=True)  # list[str] — grupos inferidos do CNAE
     ativo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, onupdate=lambda: datetime.now(timezone.utc))
@@ -65,6 +68,11 @@ class Empresa(db.Model):
             'varejista': 'Varejista',
         }
         return labels.get(self.posicao_cadeia, self.posicao_cadeia)
+
+    @property
+    def segmentos_efetivos(self) -> set:
+        """União dos segmentos inferidos pelo CNAE com os adicionados manualmente."""
+        return set(self.segmentos_inferidos or []) | set(self.segmentos_override or [])
 
     def __repr__(self):
         return f'<Empresa {self.razao_social}>'

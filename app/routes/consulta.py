@@ -169,6 +169,39 @@ def lote_xml():
             processar_xml_nfe, processar_lote_compactado, _processar_xml_bytes,
         )
 
+        from app.services.cnae_segmento import validar_ncm_vs_empresa as _validar_cnae
+
+        def _aplicar_critica_cnae(relatorio, emp):
+            """Anota critica_cnae em cada item e totaliza por nota e por relatorio."""
+            total_criticas = total_alertas = 0
+
+            def _anotar(itens):
+                c = a = 0
+                for it in itens:
+                    v = _validar_cnae(it, emp)
+                    it['critica_cnae'] = v
+                    if v['severidade'] == 'CRITICA':
+                        c += 1
+                    elif v['severidade'] == 'ALERTA':
+                        a += 1
+                return c, a
+
+            if 'notas' in relatorio:
+                for nota in relatorio['notas']:
+                    c, a = _anotar(nota.get('itens') or [])
+                    nota['criticas_cnae'] = c
+                    nota['alertas_cnae'] = a
+                    total_criticas += c
+                    total_alertas += a
+            elif 'itens' in relatorio:
+                total_criticas, total_alertas = _anotar(relatorio.get('itens') or [])
+                relatorio['criticas_cnae'] = total_criticas
+                relatorio['alertas_cnae'] = total_alertas
+
+            relatorio['total_criticas_cnae'] = total_criticas
+            relatorio['total_alertas_cnae'] = total_alertas
+            return relatorio
+
         # ── Modo 1: múltiplos XMLs selecionados diretamente ──────────────────
         arquivos_xml = request.files.getlist('xmls')
         arquivos_xml = [f for f in arquivos_xml if f and f.filename.lower().endswith('.xml')]
@@ -215,6 +248,7 @@ def lote_xml():
                 'inconsistencias': inconsistencias, 'notas': notas,
                 'lote_ids': lote_ids,
             }
+            _aplicar_critica_cnae(relatorio, empresa)
             return render_template('consulta/lote_relatorio.html',
                                    empresa=empresa, relatorio=relatorio, tipo='xml_lote')
 
@@ -247,6 +281,7 @@ def lote_xml():
             flash(f'Erro ao processar: {relatorio["erro"]}', 'danger')
             return render_template('consulta/lote_xml.html', empresa=empresa, empresas=empresas)
 
+        _aplicar_critica_cnae(relatorio, empresa)
         return render_template('consulta/lote_relatorio.html',
                                empresa=empresa, relatorio=relatorio, tipo=tipo_rel)
 

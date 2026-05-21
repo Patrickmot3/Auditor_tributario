@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, jsonify
 from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.empresa import Empresa, UsuarioEmpresa
 from app.models.consulta import Consulta
+from app.services.cnae_segmento import inferir_segmentos, GRUPOS_LABEL
 
 empresa_bp = Blueprint('empresa', __name__)
 
@@ -11,6 +12,15 @@ def _checar_acesso(empresa):
     """Aborta com 403 se o usuário não tiver acesso à empresa."""
     if not current_user.is_admin and empresa not in current_user.empresas:
         abort(403)
+
+
+def _processar_segmentos(form, cnae_principal):
+    """Extrai segmentos do form e recomputa inferidos. Retorna (inferidos, override)."""
+    cnaes_sec_raw = form.get('cnaes_secundarios', '')
+    cnaes_sec = [c.strip() for c in cnaes_sec_raw.split(',') if c.strip()]
+    segmentos_override = sorted(set(form.getlist('segmentos_override')))
+    segmentos_inferidos = sorted(inferir_segmentos(cnae_principal, cnaes_sec))
+    return cnaes_sec, segmentos_inferidos, segmentos_override
 
 
 @empresa_bp.route('/')
@@ -29,27 +39,29 @@ def nova():
     if request.method == 'POST':
         cnpj = request.form.get('cnpj', '').strip()
         razao = request.form.get('razao_social', '').strip()
-        cnae = request.form.get('cnae_principal', '').strip()
+        cnae = request.form.get('cnae_principal', '').replace('.', '').replace('-', '').strip()
         regime = request.form.get('regime_tributario', '').strip()
         posicao = request.form.get('posicao_cadeia', '').strip()
         email = request.form.get('email', '').strip()
 
         if not all([cnpj, razao, cnae, regime, posicao]):
             flash('Preencha todos os campos obrigatórios.', 'danger')
-            return render_template('empresa/form.html', empresa=None)
+            return render_template('empresa/form.html', empresa=None, grupos_label=GRUPOS_LABEL)
 
         cnpj_limpo = cnpj.replace('.', '').replace('/', '').replace('-', '')
 
         if Empresa.query.filter_by(cnpj=cnpj_limpo).first():
             flash('CNPJ já cadastrado.', 'danger')
-            return render_template('empresa/form.html', empresa=None)
+            return render_template('empresa/form.html', empresa=None, grupos_label=GRUPOS_LABEL)
+
+        cnaes_sec, inferidos, override = _processar_segmentos(request.form, cnae)
 
         empresa = Empresa(
             razao_social=razao,
             nome_fantasia=request.form.get('nome_fantasia', '').strip(),
             cnpj=cnpj_limpo,
             inscricao_estadual=request.form.get('inscricao_estadual', '').strip(),
-            cnae_principal=cnae.replace('.', '').replace('-', ''),
+            cnae_principal=cnae,
             regime_tributario=regime,
             posicao_cadeia=posicao,
             email=email,
@@ -63,6 +75,9 @@ def nova():
             uf=request.form.get('uf', '').strip().upper(),
             cep=request.form.get('cep', '').strip(),
             telefone=request.form.get('telefone', '').strip(),
+            cnaes_secundarios=cnaes_sec or None,
+            segmentos_inferidos=inferidos or None,
+            segmentos_override=override or None,
         )
         db.session.add(empresa)
         db.session.flush()
@@ -74,7 +89,7 @@ def nova():
         flash(f'Empresa "{razao}" cadastrada com sucesso!', 'success')
         return redirect(url_for('empresa.detalhe', id=empresa.id))
 
-    return render_template('empresa/form.html', empresa=None)
+    return render_template('empresa/form.html', empresa=None, grupos_label=GRUPOS_LABEL)
 
 
 @empresa_bp.route('/<int:id>')
@@ -98,25 +113,32 @@ def editar(id):
     _checar_acesso(empresa)
 
     if request.method == 'POST':
-        empresa.razao_social = request.form.get('razao_social', empresa.razao_social).strip()
-        empresa.nome_fantasia = request.form.get('nome_fantasia', '').strip()
-        empresa.cnae_principal = request.form.get('cnae_principal', '').replace('.', '').replace('-', '').strip()
+        cnae = request.form.get('cnae_principal', '').replace('.', '').replace('-', '').strip()
+        empresa.razao_social   = request.form.get('razao_social', empresa.razao_social).strip()
+        empresa.nome_fantasia  = request.form.get('nome_fantasia', '').strip()
+        empresa.cnae_principal = cnae
         empresa.regime_tributario = request.form.get('regime_tributario', empresa.regime_tributario)
-        empresa.posicao_cadeia = request.form.get('posicao_cadeia', empresa.posicao_cadeia)
-        empresa.email = request.form.get('email', '').strip()
-        empresa.telefone = request.form.get('telefone', '').strip()
+        empresa.posicao_cadeia    = request.form.get('posicao_cadeia', empresa.posicao_cadeia)
+        empresa.email     = request.form.get('email', '').strip()
+        empresa.telefone  = request.form.get('telefone', '').strip()
         empresa.logradouro = request.form.get('logradouro', '').strip()
-        empresa.numero = request.form.get('numero', '').strip()
+        empresa.numero     = request.form.get('numero', '').strip()
         empresa.complemento = request.form.get('complemento', '').strip()
-        empresa.bairro = request.form.get('bairro', '').strip()
-        empresa.cidade = request.form.get('cidade', '').strip()
-        empresa.uf = request.form.get('uf', '').strip().upper()
+        empresa.bairro  = request.form.get('bairro', '').strip()
+        empresa.cidade  = request.form.get('cidade', '').strip()
+        empresa.uf  = request.form.get('uf', '').strip().upper()
         empresa.cep = request.form.get('cep', '').strip()
+
+        cnaes_sec, inferidos, override = _processar_segmentos(request.form, cnae)
+        empresa.cnaes_secundarios  = cnaes_sec or None
+        empresa.segmentos_inferidos = inferidos or None
+        empresa.segmentos_override  = override or None
+
         db.session.commit()
         flash('Empresa atualizada com sucesso!', 'success')
         return redirect(url_for('empresa.detalhe', id=empresa.id))
 
-    return render_template('empresa/form.html', empresa=empresa)
+    return render_template('empresa/form.html', empresa=empresa, grupos_label=GRUPOS_LABEL)
 
 
 @empresa_bp.route('/<int:id>/desativar', methods=['POST'])
@@ -141,3 +163,18 @@ def historico_empresa(id):
                  .order_by(Consulta.created_at.desc())
                  .paginate(page=page, per_page=20))
     return render_template('empresa/historico.html', empresa=empresa, consultas=consultas)
+
+
+@empresa_bp.route('/segmentos/preview')
+@login_required
+def segmentos_preview():
+    """
+    GET /empresas/segmentos/preview?cnae=XXXXXX&secundarios=YYYY,ZZZZ
+    Retorna JSON com os grupos inferidos para o CNAE informado.
+    Usado pelo frontend em tempo real ao preencher o campo CNAE.
+    """
+    cnae = request.args.get('cnae', '').strip()
+    sec_raw = request.args.get('secundarios', '')
+    secundarios = [s.strip() for s in sec_raw.split(',') if s.strip()]
+    grupos = sorted(inferir_segmentos(cnae, secundarios))
+    return jsonify({'grupos': grupos, 'labels': {g: GRUPOS_LABEL[g] for g in grupos}})

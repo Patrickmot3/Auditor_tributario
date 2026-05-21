@@ -71,6 +71,71 @@
                  value="{{ empresa.inscricao_estadual if empresa else '' }}">
         </div>
 
+        <!-- ── Segmentos Tributários ──────────────────────────────────────── -->
+        <div class="col-12"><hr class="border-secondary">
+          <h6 class="text-muted">CNAEs Secundários e Segmentos Tributários</h6>
+        </div>
+
+        <div class="col-md-8">
+          <label class="form-label">CNAEs Secundários</label>
+          <div class="input-group mb-1">
+            <input type="text" id="cnaeSecInput" class="form-control font-monospace"
+                   placeholder="Digite um CNAE e pressione Enter ou vírgula">
+            <button class="btn btn-outline-secondary" type="button" id="btnAddCnae">
+              <i class="bi bi-plus"></i> Adicionar
+            </button>
+          </div>
+          <div id="cnaeSecTags" class="d-flex flex-wrap gap-1 mb-1">
+            {% for cnae in (empresa.cnaes_secundarios or []) %}
+            <span class="badge bg-secondary d-flex align-items-center gap-1 cnae-tag" data-cnae="{{ cnae }}">
+              {{ cnae }}
+              <button type="button" class="btn-close btn-close-white btn-sm p-0" style="font-size:.6rem"
+                      aria-label="Remover" onclick="removerCnae(this)"></button>
+            </span>
+            {% endfor %}
+          </div>
+          <input type="hidden" name="cnaes_secundarios" id="cnaeSecHidden"
+                 value="{{ (empresa.cnaes_secundarios or [])|join(',') if empresa else '' }}">
+          <small class="text-muted">Informe todos os CNAEs que a empresa opera para melhor inferência dos segmentos.</small>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label d-block">
+            Segmentos Tributários
+            <span class="text-muted small ms-1">— marque os grupos que a empresa comercializa</span>
+          </label>
+          <div class="row g-2" id="segmentosContainer">
+            {% set inferidos = empresa.segmentos_inferidos if empresa else [] %}
+            {% set override  = empresa.segmentos_override  if empresa else [] %}
+            {% for cod, label in grupos_label.items() %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="form-check">
+                <input class="form-check-input segmento-check" type="checkbox"
+                       name="segmentos_override" value="{{ cod }}"
+                       id="seg_{{ cod }}"
+                       {% if cod in (override or []) %}checked{% endif %}>
+                <label class="form-check-label" for="seg_{{ cod }}">
+                  {{ label }}
+                  {% if cod in (inferidos or []) %}
+                  <span class="badge bg-info text-dark ms-1 inferido-badge" data-grupo="{{ cod }}">
+                    <i class="bi bi-magic"></i> inferido
+                  </span>
+                  {% else %}
+                  <span class="badge bg-info text-dark ms-1 inferido-badge d-none" data-grupo="{{ cod }}">
+                    <i class="bi bi-magic"></i> inferido
+                  </span>
+                  {% endif %}
+                </label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <small class="text-muted mt-1 d-block">
+            <i class="bi bi-magic text-info"></i> <em>inferido</em> = detectado automaticamente pelo CNAE Principal.
+            Você pode marcar grupos adicionais manualmente.
+          </small>
+        </div>
+
         <div class="col-12"><hr class="border-secondary"><h6 class="text-muted">Endereço</h6></div>
         <div class="col-md-6">
           <label class="form-label">Logradouro</label>
@@ -140,4 +205,76 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── CNAEs Secundários — tag input ────────────────────────────────────────────
+
+function _syncHidden() {
+  const tags = [...document.querySelectorAll('#cnaeSecTags .cnae-tag')]
+    .map(el => el.dataset.cnae);
+  document.getElementById('cnaeSecHidden').value = tags.join(',');
+}
+
+function removerCnae(btn) {
+  btn.closest('.cnae-tag').remove();
+  _syncHidden();
+}
+
+function _adicionarCnae(valor) {
+  const cnae = valor.trim().replace(/\D/g, '');
+  if (!cnae || cnae.length < 2) return;
+  const container = document.getElementById('cnaeSecTags');
+  if (container.querySelector(`[data-cnae="${cnae}"]`)) return;
+  const span = document.createElement('span');
+  span.className = 'badge bg-secondary d-flex align-items-center gap-1 cnae-tag';
+  span.dataset.cnae = cnae;
+  span.innerHTML = `${cnae} <button type="button" class="btn-close btn-close-white btn-sm p-0"
+    style="font-size:.6rem" aria-label="Remover" onclick="removerCnae(this)"></button>`;
+  container.appendChild(span);
+  _syncHidden();
+}
+
+document.getElementById('btnAddCnae').addEventListener('click', () => {
+  const inp = document.getElementById('cnaeSecInput');
+  _adicionarCnae(inp.value);
+  inp.value = '';
+  inp.focus();
+  _atualizarPreview();
+});
+
+document.getElementById('cnaeSecInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const inp = e.target;
+    _adicionarCnae(inp.value);
+    inp.value = '';
+    _atualizarPreview();
+  }
+});
+
+// ── Segmentos Preview — CNAE blur ────────────────────────────────────────────
+
+function _atualizarPreview() {
+  const cnae = document.querySelector('[name="cnae_principal"]').value.trim();
+  const sec  = document.getElementById('cnaeSecHidden').value.trim();
+  if (!cnae) return;
+  const url = `/empresas/segmentos/preview?cnae=${encodeURIComponent(cnae)}&secundarios=${encodeURIComponent(sec)}`;
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      const grupos = data.grupos || [];
+      document.querySelectorAll('.inferido-badge').forEach(badge => {
+        badge.classList.toggle('d-none', !grupos.includes(badge.dataset.grupo));
+      });
+      document.querySelectorAll('.segmento-check').forEach(cb => {
+        if (grupos.includes(cb.value)) cb.checked = true;
+      });
+    })
+    .catch(() => {});
+}
+
+document.querySelector('[name="cnae_principal"]').addEventListener('blur', _atualizarPreview);
+</script>
 {% endblock %}

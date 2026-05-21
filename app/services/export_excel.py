@@ -149,6 +149,8 @@ def gerar_excel_lote_items(lote_ids):
         ('Alíq. COFINS (%)',     15),
         ('Posição Cadeia',       16),
         ('Inconsistência',       16),
+        ('Crítica CNAE',         14),
+        ('Mensagem CNAE',        55),
         ('Status',               12),
         ('Observação',           45),
     ]
@@ -160,6 +162,7 @@ def gerar_excel_lote_items(lote_ids):
     ws.autofilter(0, 0, 0, len(colunas) - 1)
 
     from app.services.ncm_validator import CST_DESCRICAO
+    from app.services.cnae_segmento import validar_ncm_vs_empresa
 
     for ri, item in enumerate(items, start=1):
         lote   = lote_cache.get(item.lote_id)
@@ -175,8 +178,17 @@ def gerar_excel_lote_items(lote_ids):
         grupo_ok     = bool(c and c.grupo_tributario)
         regime_desc  = CST_DESCRICAO.get(cst_sugerido, '') if (cst_sugerido and grupo_ok) else ''
 
+        cnae_val = validar_ncm_vs_empresa(
+            {'ncm': item.ncm or '', 'grupo': (c.grupo_tributario or '') if c else ''},
+            c.empresa if c else None,
+        )
+        cnae_sev = cnae_val['severidade'] if not cnae_val['ok'] else ''
+        cnae_msg = cnae_val['mensagem'] if not cnae_val['ok'] else ''
+
         if erro:
             fmt = fmt_erro
+        elif cnae_val['severidade'] == 'CRITICA':
+            fmt = fmt_incon
         elif c and c.inconsistencia_detectada:
             fmt = fmt_incon
         elif c and c.monofasico:
@@ -208,6 +220,8 @@ def gerar_excel_lote_items(lote_ids):
             float(c.cofins_aliquota) if c and c.cofins_aliquota is not None else 0,
             (c.posicao_cadeia or '') if c else '',
             incon_str,
+            cnae_sev,
+            cnae_msg,
             item.status_processamento or '',
             (c.observacao or '') if c else (item.mensagem_erro or ''),
         ]
