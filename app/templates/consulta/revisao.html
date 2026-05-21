@@ -102,13 +102,14 @@
           <th>Grupo / Base Legal</th>
           <th class="text-center">CST Sugerido</th>
           <th class="text-center">Inconsistência</th>
+          <th class="text-center">Crítica CNAE</th>
           <th>Data</th>
           <th style="width:200px">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for c in pendentes %}
-        <tr class="{% if c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
+        <tr class="{% if c.critica_cnae_severidade == 'CRITICA' %}table-danger{% elif c.critica_cnae_severidade == 'ALERTA' %}table-warning{% elif c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
           <td><input type="checkbox" name="consulta_ids" value="{{ c.id }}"
                      class="form-check-input chk-item"></td>
           <td class="font-monospace fw-bold">
@@ -131,6 +132,17 @@
           <td class="text-center">
             {% if c.inconsistencia_detectada %}
               <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if c.critica_cnae_severidade == 'CRITICA' %}
+              <span class="badge bg-danger" title="{{ c.critica_cnae_mensagem or '' }}">
+                <i class="bi bi-shield-exclamation"></i> Crítica
+              </span>
+            {% elif c.critica_cnae_severidade == 'ALERTA' %}
+              <span class="badge bg-warning text-dark" title="{{ c.critica_cnae_mensagem or '' }}">
+                <i class="bi bi-shield-check"></i> Alerta
+              </span>
             {% else %}—{% endif %}
           </td>
           <td><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
@@ -192,6 +204,7 @@
           <th class="text-center">Monofásico</th>
           <th>Grupo</th>
           <th class="text-center">CST Sugerido</th>
+          <th class="text-center">Crítica CNAE</th>
           <th>Revisado por</th>
           <th>Data Revisão</th>
           <th class="motivo-cell">Motivo / Obs.</th>
@@ -199,7 +212,7 @@
       </thead>
       <tbody>
         {% for c in lista_aba %}
-        <tr class="{% if c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
+        <tr class="{% if c.critica_cnae_severidade == 'CRITICA' %}table-danger{% elif c.critica_cnae_severidade == 'ALERTA' %}table-warning{% elif c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
           <td><input type="checkbox" name="consulta_ids" value="{{ c.id }}"
                      class="form-check-input chk-item"></td>
           <td class="font-monospace fw-bold">
@@ -216,6 +229,17 @@
           </td>
           <td><small>{{ c.grupo_tributario or '—' }}</small></td>
           <td class="text-center font-monospace fw-bold">{{ c.cst_sugerido or '—' }}</td>
+          <td class="text-center">
+            {% if c.critica_cnae_severidade == 'CRITICA' %}
+              <span class="badge bg-danger" title="{{ c.critica_cnae_mensagem or '' }}">
+                <i class="bi bi-shield-exclamation"></i> Crítica
+              </span>
+            {% elif c.critica_cnae_severidade == 'ALERTA' %}
+              <span class="badge bg-warning text-dark" title="{{ c.critica_cnae_mensagem or '' }}">
+                <i class="bi bi-shield-check"></i> Alerta
+              </span>
+            {% else %}—{% endif %}
+          </td>
           <td><small>{{ c.revisado_por.nome if c.revisado_por else '—' }}</small></td>
           <td><small>{{ c.revisado_em | brt if c.revisado_em else '—' }}</small></td>
           <td class="motivo-cell"><small class="text-muted">{{ c.motivo_revisao or '—' }}</small></td>

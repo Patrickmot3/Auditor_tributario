@@ -278,6 +278,15 @@ def validar_ncm(ncm: str, empresa_id: int, cst_atual: str = None):
 
 def _gravar_consulta(ncm_limpo, empresa, resultado, cst_atual):
     """Grava ou atualiza consulta no banco (sem duplicar)."""
+    from app.services.cnae_segmento import validar_ncm_vs_empresa
+
+    cnae_val  = validar_ncm_vs_empresa(
+        {'ncm': ncm_limpo, 'grupo': resultado.get('grupo') or ''},
+        empresa,
+    )
+    cnae_sev  = cnae_val['severidade'] if not cnae_val['ok'] else None
+    cnae_msg  = cnae_val['mensagem']   if not cnae_val['ok'] else None
+
     try:
         consulta = Consulta.query.filter_by(
             empresa_id=empresa.id,
@@ -296,6 +305,8 @@ def _gravar_consulta(ncm_limpo, empresa, resultado, cst_atual):
             consulta.inconsistencia_detectada = resultado['inconsistencia_detectada']
             consulta.observacao = resultado.get('observacao')
             consulta.posicao_cadeia = empresa.posicao_cadeia
+            consulta.critica_cnae_severidade = cnae_sev
+            consulta.critica_cnae_mensagem   = cnae_msg
         else:
             consulta = Consulta(
                 empresa_id=empresa.id,
@@ -314,6 +325,8 @@ def _gravar_consulta(ncm_limpo, empresa, resultado, cst_atual):
                 inconsistencia_detectada=resultado['inconsistencia_detectada'],
                 observacao=resultado.get('observacao'),
                 posicao_cadeia=empresa.posicao_cadeia,
+                critica_cnae_severidade=cnae_sev,
+                critica_cnae_mensagem=cnae_msg,
             )
             db.session.add(consulta)
 

@@ -25,6 +25,8 @@ class Consulta(db.Model):
     posicao_cadeia = db.Column(db.String(20))
     observacao = db.Column(db.Text)
     inconsistencia_detectada = db.Column(db.Boolean, default=False)
+    critica_cnae_severidade  = db.Column(db.String(10), nullable=True)  # CRITICA | ALERTA | None
+    critica_cnae_mensagem    = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Revisão / homologação

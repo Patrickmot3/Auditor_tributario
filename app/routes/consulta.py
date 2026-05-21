@@ -298,6 +298,7 @@ def historico():
     empresa_id = request.args.get('empresa_id', type=int)
     monofasico = request.args.get('monofasico')
     inconsistencia = request.args.get('inconsistencia')
+    critica_cnae_filtro = request.args.get('critica_cnae', '').strip()
     ncm_filtro = request.args.get('ncm', '').strip()
     tipo_filtro = request.args.get('tipo')
     data_nf_de  = request.args.get('data_nf_de', '').strip()
@@ -319,6 +320,10 @@ def historico():
         query = query.filter(Consulta.inconsistencia_detectada == True)
     elif inconsistencia == '0':
         query = query.filter(Consulta.inconsistencia_detectada == False)
+    if critica_cnae_filtro in ('CRITICA', 'ALERTA'):
+        query = query.filter(Consulta.critica_cnae_severidade == critica_cnae_filtro)
+    elif critica_cnae_filtro == 'OK':
+        query = query.filter(Consulta.critica_cnae_severidade.is_(None))
     if ncm_filtro:
         query = query.filter(Consulta.ncm_consultado.ilike(f'%{ncm_filtro}%'))
     if tipo_filtro:
@@ -358,7 +363,9 @@ def historico():
     return render_template('consulta/historico.html',
                            consultas=consultas, empresas=empresas,
                            empresa_id=empresa_id, monofasico=monofasico,
-                           inconsistencia=inconsistencia, ncm_filtro=ncm_filtro,
+                           inconsistencia=inconsistencia,
+                           critica_cnae_filtro=critica_cnae_filtro,
+                           ncm_filtro=ncm_filtro,
                            tipo_filtro=tipo_filtro,
                            data_nf_de=data_nf_de, data_nf_ate=data_nf_ate,
                            lote_item_map=lote_item_map,

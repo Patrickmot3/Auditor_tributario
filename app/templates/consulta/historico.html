@@ -22,6 +22,7 @@
           ('col-pis',           'PIS%'),
           ('col-cofins',        'COFINS%'),
           ('col-inconsistencia','Inconsistência'),
+          ('col-critica-cnae',  'Crítica CNAE'),
           ('col-data-nf',       'Data NF'),
           ('col-valor-item',    'Valor Item'),
           ('col-data',          'Data Consulta'),
@@ -78,6 +79,14 @@
         </select>
       </div>
       <div class="col-md-2">
+        <select name="critica_cnae" class="form-select form-select-sm">
+          <option value="">Crítica CNAE: Todas</option>
+          <option value="CRITICA" {% if critica_cnae_filtro == 'CRITICA' %}selected{% endif %}>Crítica</option>
+          <option value="ALERTA"  {% if critica_cnae_filtro == 'ALERTA'  %}selected{% endif %}>Alerta</option>
+          <option value="OK"      {% if critica_cnae_filtro == 'OK'      %}selected{% endif %}>OK / Sem crítica</option>
+        </select>
+      </div>
+      <div class="col-md-2">
         <select name="tipo" class="form-select form-select-sm">
           <option value="">Tipo: Todos</option>
           <option value="individual" {% if tipo_filtro == 'individual' %}selected{% endif %}>Individual</option>
@@ -85,9 +94,9 @@
           <option value="xml_nfe" {% if tipo_filtro == 'xml_nfe' %}selected{% endif %}>XML NF-e</option>
         </select>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-1">
         <input type="text" name="ncm" class="form-control form-control-sm font-monospace"
-               placeholder="Filtrar NCM" value="{{ ncm_filtro or '' }}">
+               placeholder="NCM" value="{{ ncm_filtro or '' }}">
       </div>
       <div class="col-md-1">
         <button type="submit" class="btn btn-sm btn-primary w-100">
@@ -125,6 +134,7 @@
         <th class="col-pis">PIS%</th>
         <th class="col-cofins">COFINS%</th>
         <th class="col-inconsistencia">Inconsistência</th>
+        <th class="col-critica-cnae">Crítica CNAE</th>
         <th class="col-data-nf">Data NF</th>
         <th class="col-valor-item">Valor Item</th>
         <th class="col-data">Data Consulta</th>
@@ -133,7 +143,7 @@
     <tbody>
       {% for c in consultas.items %}
       {% set li = lote_item_map.get(c.id) %}
-      <tr class="{% if c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
+      <tr class="{% if c.critica_cnae_severidade == 'CRITICA' %}table-danger{% elif c.critica_cnae_severidade == 'ALERTA' %}table-warning{% elif c.cst_sugerido in ('02','03','04') %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-success{% endif %}{% elif c.cst_sugerido == '05' %}{% if c.inconsistencia_detectada %}table-warning{% else %}table-primary{% endif %}{% endif %}">
         <td class="font-monospace fw-bold col-ncm">
           <a href="{{ url_for('consulta.detalhe', id=c.id) }}" class="text-decoration-none">{{ c.ncm_consultado }}</a>
         </td>
@@ -158,12 +168,23 @@
             <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i></span>
           {% else %}—{% endif %}
         </td>
+        <td class="col-critica-cnae">
+          {% if c.critica_cnae_severidade == 'CRITICA' %}
+            <span class="badge bg-danger" title="{{ c.critica_cnae_mensagem or '' }}">
+              <i class="bi bi-shield-exclamation"></i> Crítica
+            </span>
+          {% elif c.critica_cnae_severidade == 'ALERTA' %}
+            <span class="badge bg-warning text-dark" title="{{ c.critica_cnae_mensagem or '' }}">
+              <i class="bi bi-shield-check"></i> Alerta
+            </span>
+          {% else %}—{% endif %}
+        </td>
         <td class="col-data-nf"><small>{{ li.data_nf.strftime('%d/%m/%Y') if li and li.data_nf else '—' }}</small></td>
         <td class="col-valor-item text-end"><small>{{ 'R$\xa0%.2f'|format(li.valor_item|float) if li and li.valor_item is not none else '—' }}</small></td>
         <td class="col-data"><small>{{ c.created_at.strftime('%d/%m/%Y') if c.created_at else '—' }}</small></td>
       </tr>
       {% else %}
-      <tr><td colspan="12" class="text-center text-muted py-4">Nenhuma consulta encontrada.</td></tr>
+      <tr><td colspan="13" class="text-center text-muted py-4">Nenhuma consulta encontrada.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -171,7 +192,7 @@
 
 <!-- Paginação (preserva filtros ativos) -->
 {% if consultas.pages > 1 %}
-{% set qs_base = '&empresa_id=' ~ (empresa_id or '') ~ '&monofasico=' ~ (monofasico or '') ~ '&inconsistencia=' ~ (inconsistencia or '') ~ '&tipo=' ~ (tipo_filtro or '') ~ '&ncm=' ~ (ncm_filtro or '') ~ '&data_nf_de=' ~ (data_nf_de or '') ~ '&data_nf_ate=' ~ (data_nf_ate or '') %}
+{% set qs_base = '&empresa_id=' ~ (empresa_id or '') ~ '&monofasico=' ~ (monofasico or '') ~ '&inconsistencia=' ~ (inconsistencia or '') ~ '&critica_cnae=' ~ (critica_cnae_filtro or '') ~ '&tipo=' ~ (tipo_filtro or '') ~ '&ncm=' ~ (ncm_filtro or '') ~ '&data_nf_de=' ~ (data_nf_de or '') ~ '&data_nf_ate=' ~ (data_nf_ate or '') %}
 <nav>
   <ul class="pagination pagination-sm justify-content-center">
     {% if consultas.has_prev %}
@@ -198,7 +219,7 @@
 <script>
 const LS_KEY = 'tribsync_historico_cols';
 const ALL_COLS = ['col-ncm','col-empresa','col-produto','col-monofasico','col-grupo',
-                  'col-cst','col-pis','col-cofins','col-inconsistencia',
+                  'col-cst','col-pis','col-cofins','col-inconsistencia','col-critica-cnae',
                   'col-data-nf','col-valor-item','col-data'];
 
 function applyColVisibility(hidden) {
