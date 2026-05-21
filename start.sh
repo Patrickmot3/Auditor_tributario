@@ -9,6 +9,9 @@ flask db upgrade
 echo ">>> Populando dados iniciais (seed idempotente)..."
 flask seed-db || echo "Seed já executado ou ignorado."
 
+echo ">>> Corrigindo referencias legais das aliquotas (idempotente)..."
+flask corrigir-aliquotas || echo "corrigir-aliquotas ignorado."
+
 echo ">>> Iniciando gunicorn..."
 exec gunicorn run:app \
   --workers=2 \

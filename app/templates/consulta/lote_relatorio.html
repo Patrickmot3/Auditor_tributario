@@ -81,7 +81,7 @@
 <div class="card mb-3">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span><i class="bi bi-file-earmark-zip"></i> Arquivo: <strong>{{ relatorio.arquivo_origem }}</strong></span>
-    <span class="badge bg-primary">{{ relatorio.total_arquivos }} NF-e(s) processada(s)</span>
+    <span class="badge bg-primary">{{ relatorio.notas | rejectattr('erro') | list | length }} NF-e(s) processada(s)</span>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
@@ -100,7 +100,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for nota in relatorio.notas %}
+          {% for nota in relatorio.notas if not nota.erro %}
           {% set nota_idx = loop.index %}
           <tr {% if nota.erro %}class="table-danger"{% elif nota.inconsistencias %}class="table-warning"{% endif %}>
             <td class="text-center">
