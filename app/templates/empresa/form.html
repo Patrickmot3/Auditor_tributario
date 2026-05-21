@@ -73,19 +73,16 @@
 
         <!-- ── Segmentos Tributários ──────────────────────────────────────── -->
         <div class="col-12"><hr class="border-secondary">
-          <h6 class="text-muted">CNAEs Secundários e Segmentos Tributários</h6>
+          <h6 class="text-muted">CNAEs para inferência de segmentos</h6>
         </div>
 
         <div class="col-md-8">
-          <label class="form-label">CNAEs Secundários</label>
-          <div class="input-group mb-1">
-            <input type="text" id="cnaeSecInput" class="form-control font-monospace"
-                   placeholder="Digite um CNAE e pressione Enter ou vírgula">
-            <button class="btn btn-outline-secondary" type="button" id="btnAddCnae">
-              <i class="bi bi-plus"></i> Adicionar
-            </button>
-          </div>
-          <div id="cnaeSecTags" class="d-flex flex-wrap gap-1 mb-1">
+          <label class="form-label">
+            CNAEs utilizados na inferência
+            <span class="text-muted small ms-1">— principal + secundários</span>
+          </label>
+          <div id="cnaeSecTags" class="d-flex flex-wrap gap-1 mb-2">
+            <!-- tag do principal inserida por JS ao carregar -->
             {% for cnae in (empresa.cnaes_secundarios or []) %}
             <span class="badge bg-secondary d-flex align-items-center gap-1 cnae-tag" data-cnae="{{ cnae }}">
               {{ cnae }}
@@ -94,9 +91,16 @@
             </span>
             {% endfor %}
           </div>
+          <div class="input-group mb-1">
+            <input type="text" id="cnaeSecInput" class="form-control font-monospace"
+                   placeholder="Adicionar CNAE secundário (Enter ou vírgula)">
+            <button class="btn btn-outline-secondary" type="button" id="btnAddCnae">
+              <i class="bi bi-plus"></i> Adicionar
+            </button>
+          </div>
           <input type="hidden" name="cnaes_secundarios" id="cnaeSecHidden"
                  value="{{ (empresa.cnaes_secundarios or [])|join(',') if empresa else '' }}">
-          <small class="text-muted">Informe todos os CNAEs que a empresa opera para melhor inferência dos segmentos.</small>
+          <small class="text-muted">O CNAE Principal é incluído automaticamente. Adicione os demais CNAEs para melhorar a inferência.</small>
         </div>
 
         <div class="col-12">
@@ -209,6 +213,21 @@
 
 {% block extra_js %}
 <script>
+// ── Tag do CNAE Principal (não removível) ────────────────────────────────────
+
+function _atualizarTagPrincipal() {
+  const cnae = document.querySelector('[name="cnae_principal"]').value.replace(/\D/g, '').trim();
+  const old  = document.getElementById('tagPrincipal');
+  if (old) old.remove();
+  if (!cnae) return;
+  const container = document.getElementById('cnaeSecTags');
+  const span = document.createElement('span');
+  span.id = 'tagPrincipal';
+  span.className = 'badge bg-primary d-flex align-items-center gap-1';
+  span.innerHTML = `${cnae} <span class="ms-1 opacity-75" style="font-size:.65rem;font-weight:400">principal</span>`;
+  container.insertBefore(span, container.firstChild);
+}
+
 // ── CNAEs Secundários — tag input ────────────────────────────────────────────
 
 function _syncHidden() {
@@ -220,6 +239,7 @@ function _syncHidden() {
 function removerCnae(btn) {
   btn.closest('.cnae-tag').remove();
   _syncHidden();
+  _atualizarPreview();
 }
 
 function _adicionarCnae(valor) {
@@ -247,14 +267,13 @@ document.getElementById('btnAddCnae').addEventListener('click', () => {
 document.getElementById('cnaeSecInput').addEventListener('keydown', e => {
   if (e.key === 'Enter' || e.key === ',') {
     e.preventDefault();
-    const inp = e.target;
-    _adicionarCnae(inp.value);
-    inp.value = '';
+    _adicionarCnae(e.target.value);
+    e.target.value = '';
     _atualizarPreview();
   }
 });
 
-// ── Segmentos Preview — CNAE blur ────────────────────────────────────────────
+// ── Segmentos Preview ────────────────────────────────────────────────────────
 
 function _atualizarPreview() {
   const cnae = document.querySelector('[name="cnae_principal"]').value.trim();
@@ -265,9 +284,9 @@ function _atualizarPreview() {
     .then(r => r.json())
     .then(data => {
       const grupos = data.grupos || [];
-      document.querySelectorAll('.inferido-badge').forEach(badge => {
-        badge.classList.toggle('d-none', !grupos.includes(badge.dataset.grupo));
-      });
+      document.querySelectorAll('.inferido-badge').forEach(b =>
+        b.classList.toggle('d-none', !grupos.includes(b.dataset.grupo))
+      );
       document.querySelectorAll('.segmento-check').forEach(cb => {
         if (grupos.includes(cb.value)) cb.checked = true;
       });
@@ -275,6 +294,20 @@ function _atualizarPreview() {
     .catch(() => {});
 }
 
-document.querySelector('[name="cnae_principal"]').addEventListener('blur', _atualizarPreview);
+// CNAE Principal: debounce 600ms no input + atualiza tag
+let _debTimer;
+document.querySelector('[name="cnae_principal"]').addEventListener('input', () => {
+  clearTimeout(_debTimer);
+  _debTimer = setTimeout(() => {
+    _atualizarTagPrincipal();
+    _atualizarPreview();
+  }, 600);
+});
+
+// Ao carregar a página (modo editar): renderiza tag e badges
+document.addEventListener('DOMContentLoaded', () => {
+  _atualizarTagPrincipal();
+  _atualizarPreview();
+});
 </script>
 {% endblock %}
