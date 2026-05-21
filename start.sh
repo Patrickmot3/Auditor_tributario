@@ -12,6 +12,9 @@ flask seed-db || echo "Seed já executado ou ignorado."
 echo ">>> Corrigindo referencias legais das aliquotas (idempotente)..."
 flask corrigir-aliquotas || echo "corrigir-aliquotas ignorado."
 
+echo ">>> Corrigindo nomes de grupos e recomputando critica_cnae (idempotente)..."
+flask corrigir-grupos || echo "corrigir-grupos ignorado."
+
 echo ">>> Iniciando gunicorn..."
 exec gunicorn run:app \
   --workers=2 \

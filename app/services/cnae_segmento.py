@@ -95,15 +95,21 @@ CNAE_PARA_GRUPOS: dict[str, set[str]] = {
 # → código do grupo (G100…G800)
 # ---------------------------------------------------------------------------
 NOME_PARA_CODIGO: dict[str, str] = {
-    'Veículos e Autopeças':                        'G100',
-    'Combustíveis e Derivados':                    'G200',
-    'Fármacos e Perfumaria':                       'G300',
-    'Bebidas Frias':                               'G400',
-    'Pneumáticos':                                 'G500',
-    'Substituição Tributária PIS/COFINS':          'G600',
-    'Alimentos Básicos — Alíquota Zero PIS/COFINS': 'G700',
+    'Veículos e Autopeças':                           'G100',
+    'Combustíveis e Derivados':                       'G200',
+    'Fármacos e Perfumaria':                          'G300',
+    'Bebidas Frias':                                  'G400',
+    'Pneumáticos':                                    'G500',
+    'Substituição Tributária PIS/COFINS':             'G600',
+    # G700 — variante canônica (com acento e travessão)
+    'Alimentos Básicos — Alíquota Zero PIS/COFINS':   'G700',
+    # G700 — variante legada gravada no banco antes da correção
+    'Alimentos Basicos - Aliquota Zero PIS/COFINS':   'G700',
+    # G750 — variante canônica
     'Livros e Publicações — Alíquota Zero PIS/COFINS': 'G750',
-    'Insumos Agropecuários — Suspensão PIS/COFINS': 'G800',
+    # G750 — variante legada
+    'Livros e Publicacoes - Aliquota Zero PIS/COFINS': 'G750',
+    'Insumos Agropecuários — Suspensão PIS/COFINS':   'G800',
 }
 
 # Rótulos exibidos nos checkboxes do formulário

@@ -858,6 +858,72 @@ def register_commands(app):
         db.session.commit()
         click.echo(f'Correção concluída: {inseridos} NCM(s) inseridos em Combustíveis.')
 
+    @app.cli.command('corrigir-grupos')
+    def corrigir_grupos():
+        """Corrige nomes legados de grupos tributários no banco e recomputa critica_cnae — idempotente."""
+        from app.models.consulta import Consulta
+        from app.services.cnae_segmento import validar_ncm_vs_empresa
+
+        NOMES_CORRECAO = {
+            # nome_antigo → nome_canônico
+            'Alimentos Basicos - Aliquota Zero PIS/COFINS':   'Alimentos Básicos — Alíquota Zero PIS/COFINS',
+            'Livros e Publicacoes - Aliquota Zero PIS/COFINS': 'Livros e Publicações — Alíquota Zero PIS/COFINS',
+        }
+
+        grupos_corrigidos = 0
+        consultas_corrigidas = 0
+
+        # 1. Corrige grupos_tributarios.nome
+        for nome_antigo, nome_novo in NOMES_CORRECAO.items():
+            g = GrupoTributario.query.filter_by(nome=nome_antigo).first()
+            if g:
+                g.nome = nome_novo
+                grupos_corrigidos += 1
+                click.echo(f'  Grupo corrigido: [{nome_antigo}] → [{nome_novo}]')
+        db.session.commit()
+
+        # 2. Corrige consultas.grupo_tributario e recomputa critica_cnae
+        for nome_antigo, nome_novo in NOMES_CORRECAO.items():
+            consultas = Consulta.query.filter_by(grupo_tributario=nome_antigo).all()
+            for c in consultas:
+                c.grupo_tributario = nome_novo
+                emp = c.empresa
+                if emp:
+                    v = validar_ncm_vs_empresa(
+                        {'ncm': c.ncm_consultado or '', 'grupo': nome_novo},
+                        emp,
+                    )
+                    c.critica_cnae_severidade = v['severidade'] if not v['ok'] else None
+                    c.critica_cnae_mensagem   = v['mensagem']   if not v['ok'] else None
+                consultas_corrigidas += 1
+            if consultas:
+                click.echo(f'  {len(consultas)} consultas atualizadas: [{nome_antigo}]')
+        db.session.commit()
+
+        # 3. Recomputa critica_cnae para consultas com grupo correto mas critica NULL
+        pendentes = Consulta.query.filter(
+            Consulta.grupo_tributario.isnot(None),
+            Consulta.critica_cnae_severidade.is_(None),
+            Consulta.critica_cnae_mensagem.is_(None),
+        ).all()
+        for c in pendentes:
+            emp = c.empresa
+            if not emp:
+                continue
+            v = validar_ncm_vs_empresa(
+                {'ncm': c.ncm_consultado or '', 'grupo': c.grupo_tributario or ''},
+                emp,
+            )
+            if not v['ok']:
+                c.critica_cnae_severidade = v['severidade']
+                c.critica_cnae_mensagem   = v['mensagem']
+                consultas_corrigidas += 1
+        db.session.commit()
+        if pendentes:
+            click.echo(f'  {consultas_corrigidas} consultas com critica_cnae recomputada.')
+
+        click.echo(f'\ncorrigir-grupos: {grupos_corrigidos} grupo(s), {consultas_corrigidas} consulta(s) atualizados.')
+
     @app.cli.command('criar-usuario')
     @click.argument('email')
     @click.argument('senha')
